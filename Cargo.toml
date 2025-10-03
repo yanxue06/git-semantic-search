@@ -1,0 +1,67 @@
+[package]
+name = "git-semantic"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Semantic search for git history using natural language"
+license = "MIT"
+repository = "https://github.com/yourusername/git-semantic"
+keywords = ["git", "search", "semantic", "cli", "embeddings"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "git-semantic"
+path = "src/main.rs"
+
+[dependencies]
+# Git operations
+git2 = "0.18"
+
+# ONNX Runtime for embeddings
+ort = "2.0.0-rc.10"
+
+# Numerical arrays
+ndarray = "0.15"
+
+# CLI framework
+clap = { version = "4.5", features = ["derive", "cargo"] }
+
+# Progress bars
+indicatif = "0.17"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+
+# Parallel processing
+rayon = "1.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File system utilities
+directories = "5.0"
+
+# HTTP client for downloading models
+reqwest = { version = "0.12", features = ["blocking", "stream"] }
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
