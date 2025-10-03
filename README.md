@@ -1,4 +1,4 @@
-# git-semantic
+# git-semantic (IN DEVELOPMENT)
 
 **Semantic search for git history using natural language**
 
