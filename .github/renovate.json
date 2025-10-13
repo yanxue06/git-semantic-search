@@ -3,6 +3,7 @@
     "extends": [
       "config:recommended"
     ],
+    "platformAutomerge": true,
     "labels": [
       "dependencies"
     ],
@@ -12,36 +13,12 @@
     "packageRules": [
       {
         "matchUpdateTypes": [
-          "patch"
-        ],
+            "minor",
+            "patch",
+            "pin",
+            "digest"
+          ],
         "automerge": true
-      },
-      {
-        "matchUpdateTypes": [
-          "minor"
-        ],
-        "matchCurrentVersion": "!/^0/",
-        "automerge": true
-      },
-      {
-        "matchUpdateTypes": [
-          "minor"
-        ],
-        "matchCurrentVersion": "/^0/",
-        "automerge": true
-      },
-      {
-        "matchUpdateTypes": [
-          "pin",
-          "digest"
-        ],
-        "automerge": true
-      },
-      {
-        "matchUpdateTypes": [
-          "major"
-        ],
-        "automerge": false
       }
     ]
   }
