@@ -74,7 +74,7 @@ enum Commands {
         file: Option<String>,
 
         /// Repository path (defaults to current directory)
-        #[arg(short, long)]
+        #[arg(long)]
         path: Option<String>,
     },
 
