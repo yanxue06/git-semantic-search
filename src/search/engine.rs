@@ -21,7 +21,7 @@ impl SearchEngine {
     }
 
     pub fn search(
-        &self,
+        &mut self,
         index: &SemanticIndex,
         query: &str,
         num_results: usize,

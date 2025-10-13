@@ -154,7 +154,7 @@ pub fn search(
 
     // Perform search
     let model_manager = ModelManager::new()?;
-    let engine = SearchEngine::new(model_manager)?;
+    let mut engine = SearchEngine::new(model_manager)?;
     let results = engine.search(&index, query, num_results, filters)?;
 
     // Display results

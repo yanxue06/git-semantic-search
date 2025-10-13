@@ -2,7 +2,8 @@ use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::Array1;
-use ort::{GraphOptimizationLevel, Session};
+use ort::session::builder::GraphOptimizationLevel;
+use ort::session::Session;
 use std::fs;
 use std::path::PathBuf;
 use tokenizers::Tokenizer;
@@ -59,7 +60,7 @@ impl ModelManager {
         info!("Loading tokenizer...");
         let tokenizer_path = self.tokenizer_path();
         let tokenizer = Tokenizer::from_file(tokenizer_path)
-            .context("Failed to load tokenizer")?;
+            .map_err(|e| anyhow::anyhow!("Failed to load tokenizer: {}", e))?;
 
         self.session = Some(session);
         self.tokenizer = Some(tokenizer);
@@ -141,10 +142,10 @@ impl ModelManager {
         Ok(())
     }
 
-    pub fn encode_text(&self, text: &str) -> Result<Embedding> {
+    pub fn encode_text(&mut self, text: &str) -> Result<Embedding> {
         debug!("Encoding text: {}", &text[..text.len().min(50)]);
 
-        let session = self.session.as_ref()
+        let session = self.session.as_mut()
             .context("Model not initialized. Call init() first.")?;
         let tokenizer = self.tokenizer.as_ref()
             .context("Tokenizer not initialized. Call init() first.")?;
@@ -165,38 +166,51 @@ impl ModelManager {
         // Prepare inputs as 2D arrays (batch_size=1, sequence_length=max_len)
         let input_ids_array: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
         let attention_mask_array: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
+        let token_type_ids_array: Vec<i64> = vec![0; max_len]; // BERT uses 0 for all tokens
 
         // Create ONNX input tensors
-        use ort::inputs;
-        let input_ids_tensor = ndarray::Array2::from_shape_vec(
+        use ort::value::Value;
+        
+        let input_ids_array_2d = ndarray::Array2::from_shape_vec(
             (1, max_len),
             input_ids_array,
         )?;
-        let attention_mask_tensor = ndarray::Array2::from_shape_vec(
+        let attention_mask_array_2d = ndarray::Array2::from_shape_vec(
             (1, max_len),
             attention_mask_array,
         )?;
+        let token_type_ids_array_2d = ndarray::Array2::from_shape_vec(
+            (1, max_len),
+            token_type_ids_array,
+        )?;
+        
+        let input_ids_tensor = Value::from_array((input_ids_array_2d.shape(), input_ids_array_2d.as_slice().unwrap().to_vec()))?;
+        let attention_mask_tensor = Value::from_array((attention_mask_array_2d.shape(), attention_mask_array_2d.as_slice().unwrap().to_vec()))?;
+        let token_type_ids_tensor = Value::from_array((token_type_ids_array_2d.shape(), token_type_ids_array_2d.as_slice().unwrap().to_vec()))?;
 
         // Run inference
-        let outputs = session.run(inputs![
+        let inputs = ort::inputs![
             "input_ids" => input_ids_tensor,
             "attention_mask" => attention_mask_tensor,
-        ]?)?;
+            "token_type_ids" => token_type_ids_tensor,
+        ];
+        let outputs = session.run(inputs)?;
 
         // Extract the embedding from the output
-        // BGE models output a tensor of shape [batch_size, hidden_size]
+        // BGE models output a tensor of shape [batch_size, sequence_length, hidden_size]
         let output_tensor = outputs["last_hidden_state"]
             .try_extract_tensor::<f32>()?;
         
         // Get the [CLS] token embedding (first token)
-        let shape = output_tensor.shape();
-        let hidden_size = shape[2];
+        let (shape, data) = output_tensor;
+        let _batch_size = shape[0] as usize;
+        let seq_len = shape[1] as usize;
+        let hidden_size = shape[2] as usize;
         
-        let embedding: Vec<f32> = output_tensor
-            .slice(ndarray::s![0, 0, ..])
-            .iter()
-            .copied()
-            .collect();
+        // Extract the [CLS] token (index 0) from the first batch
+        let cls_start = 0 * seq_len * hidden_size + 0 * hidden_size;
+        let cls_end = cls_start + hidden_size;
+        let embedding: Vec<f32> = data[cls_start..cls_end].to_vec();
 
         // Normalize the embedding (L2 normalization)
         let embedding_array = Array1::from_vec(embedding);
@@ -210,7 +224,7 @@ impl ModelManager {
         Ok(normalized)
     }
 
-    pub fn encode_batch(&self, texts: Vec<String>) -> Result<Vec<Embedding>> {
+    pub fn encode_batch(&mut self, texts: Vec<String>) -> Result<Vec<Embedding>> {
         // For now, encode sequentially
         // TODO: Implement true batch encoding for better performance
         texts
