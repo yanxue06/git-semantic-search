@@ -56,6 +56,9 @@ directories = "5.0"
 # HTTP client for downloading models
 reqwest = { version = "0.12", features = ["blocking", "stream"] }
 
+# Tokenization for text processing
+tokenizers = "0.20"
+
 [dev-dependencies]
 tempfile = "3.8"
 
