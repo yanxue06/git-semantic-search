@@ -51,7 +51,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # File system utilities
-directories = "5.0"
+directories = "6.0"
 
 # HTTP client for downloading models
 reqwest = { version = "0.12", features = ["blocking", "stream"] }
