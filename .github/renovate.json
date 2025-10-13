@@ -12,12 +12,29 @@
     "packageRules": [
       {
         "matchUpdateTypes": [
-          "minor",
-          "patch",
+          "patch"
+        ],
+        "automerge": true
+      },
+      {
+        "matchUpdateTypes": [
+          "minor"
+        ],
+        "matchCurrentVersion": "!/^0/",
+        "automerge": true
+      },
+      {
+        "matchUpdateTypes": [
+          "minor"
+        ],
+        "matchCurrentVersion": "/^0/",
+        "automerge": true
+      },
+      {
+        "matchUpdateTypes": [
           "pin",
           "digest"
         ],
-        "matchCurrentVersion": "!/^0/",
         "automerge": true
       },
       {
