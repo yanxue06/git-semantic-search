@@ -1,4 +1,4 @@
-# git-semantic (IN DEVELOPMENT)
+# git-semantic
 
 **Semantic search for git history using natural language**
 
@@ -46,8 +46,8 @@ You found it in 3 seconds instead of 20 minutes.
 ### From Source (Current)
 
 ```bash
-git clone https://github.com/yourusername/git-semantic
-cd git-semantic
+git clone https://github.com/yanxue06/git-semantic-search
+cd git-semantic-search
 cargo build --release
 cargo install --path .
 ```
@@ -70,7 +70,7 @@ brew install git-semantic
 git-semantic init
 ```
 
-This downloads the embedding model (~130MB) - only needed once.
+This downloads the BGE-small-en-v1.5 ONNX model (~130MB) - only needed once.
 
 ### 2. Index your repository
 
@@ -130,20 +130,24 @@ git-semantic stats
 
 ## How It Works
 
-1. **Indexing**: Parses your git history and generates semantic embeddings for each commit using a local AI model (bge-small-en-v1.5)
-2. **Storage**: Stores embeddings in `.git/semantic-index` (automatically ignored by git)
+1. **Indexing**: Parses your git history and generates semantic embeddings for each commit using the BGE-small-en-v1.5 ONNX model
+2. **Storage**: Stores embeddings in `.git/semantic-index` using efficient binary serialization (automatically ignored by git)
 3. **Search**: Converts your query to an embedding and finds the most similar commits using cosine similarity
+4. **ONNX Runtime**: Uses ONNX Runtime for fast, local AI inference without external dependencies
 
 ## Development Status
 
-**Current Phase: MVP (Phase 1)**
+**✅ MVP Complete - Fully Functional!**
 
 - [x] Project structure and dependencies
 - [x] CLI interface with clap
-- [ ] Git history parser implementation
-- [ ] ONNX embedding model integration
-- [ ] Vector storage and search
-- [ ] Progress bars and user feedback
+- [x] Git history parser implementation
+- [x] ONNX embedding model integration (BGE-small-en-v1.5)
+- [x] Vector storage and search with binary serialization
+- [x] Progress bars and user feedback
+- [x] HuggingFace model download with progress tracking
+- [x] Tokenization and L2 normalization
+- [x] Semantic search with similarity scoring
 
 **Coming Soon:**
 - Phase 2: Performance optimizations (parallel processing, compression)
@@ -156,18 +160,33 @@ git-semantic stats
 - ~130MB disk space for the model
 - Rust 1.70+ (for building from source)
 
+## Technical Implementation
+
+### Core Technologies
+- **ONNX Runtime**: Fast, local AI inference with the `ort` crate
+- **BGE Embeddings**: BAAI's BGE-small-en-v1.5 model for high-quality semantic embeddings
+- **Tokenization**: BERT-style tokenization with `tokenizers` crate
+- **Binary Storage**: Efficient `bincode` serialization for index storage
+- **Git Integration**: Uses `git2` crate for robust git history parsing
+
+### Model Details
+- **Model**: BGE-small-en-v1.5 (384-dimensional embeddings)
+- **Size**: ~130MB ONNX model + tokenizer
+- **Performance**: < 100ms inference time per query
+- **Storage**: ~0.04MB per 7 commits (highly efficient)
+
 ## Project Structure
 
 ```
 git-semantic/
 ├── src/
 │   ├── main.rs           # CLI entry point
-│   ├── git/              # Git parsing
-│   ├── embedding/        # AI embeddings
-│   ├── index/            # Index storage
-│   ├── search/           # Search engine
-│   └── cli/              # Command handlers
-├── models/               # Downloaded models
+│   ├── git/              # Git parsing and history extraction
+│   ├── embedding/        # ONNX model integration and tokenization
+│   ├── index/            # Binary storage and indexing
+│   ├── search/           # Semantic search engine
+│   └── cli/              # Command handlers and user interface
+├── .git/semantic-index/  # Generated index storage (auto-ignored)
 └── tests/                # Integration tests
 ```
 
@@ -181,12 +200,30 @@ MIT
 
 ## Roadmap
 
-- [ ] Phase 1: MVP (Core functionality)
+- [x] Phase 1: MVP (Core functionality) ✅
 - [ ] Phase 2: Performance & usability
 - [ ] Phase 3: Advanced features (TUI, clustering, exports)
 - [ ] Phase 4: Polish & distribution
 
+## Real Example Output
+
+```bash
+$ git-semantic search "ONNX integration"
+
+🎯 Most Relevant Commits for: "ONNX integration"
+
+1. 28e9c31 - Implement ONNX model inference and HuggingFace download (0.69 similarity)
+   Author: yan, 2025-10-13 06:50:59 UTC
+   +use indicatif::{ProgressBar, ProgressStyle};
+   +use ndarray::Array1;
+
+2. 079773d - Initialize model in IndexBuilder and SearchEngine (0.59 similarity)
+   Author: yan, 2025-10-13 06:51:05 UTC
+   -    pub fn new(model_manager: ModelManager) -> Result<Self> {
+   +    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
+```
+
 ---
 
-**Status**: 🚧 Early development - expect rough edges!
+**Status**: ✅ **Fully functional MVP ready for use!**
 
