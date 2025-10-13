@@ -1,14 +1,20 @@
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
+use indicatif::{ProgressBar, ProgressStyle};
+use ndarray::Array1;
+use ort::{GraphOptimizationLevel, Session};
 use std::fs;
 use std::path::PathBuf;
-use tracing::info;
+use tokenizers::Tokenizer;
+use tracing::{info, debug};
 
 use super::{Embedding, EmbeddingConfig};
 
 pub struct ModelManager {
     config: EmbeddingConfig,
     model_dir: PathBuf,
+    session: Option<Session>,
+    tokenizer: Option<Tokenizer>,
 }
 
 impl ModelManager {
@@ -21,46 +27,192 @@ impl ModelManager {
         let model_dir = project_dirs.data_dir().join("models");
         fs::create_dir_all(&model_dir)?;
 
-        Ok(Self { config, model_dir })
+        Ok(Self {
+            config,
+            model_dir,
+            session: None,
+            tokenizer: None,
+        })
+    }
+
+    /// Initialize the model (load ONNX session and tokenizer)
+    pub fn init(&mut self) -> Result<()> {
+        if self.session.is_some() {
+            return Ok(());
+        }
+
+        info!("Loading ONNX model...");
+        let model_path = self.model_path();
+        
+        if !model_path.exists() {
+            anyhow::bail!(
+                "Model not found. Please run 'git-semantic init' first to download the model."
+            );
+        }
+
+        // Create ONNX Runtime session
+        let session = Session::builder()?
+            .with_optimization_level(GraphOptimizationLevel::Level3)?
+            .with_intra_threads(4)?
+            .commit_from_file(&model_path)?;
+
+        info!("Loading tokenizer...");
+        let tokenizer_path = self.tokenizer_path();
+        let tokenizer = Tokenizer::from_file(tokenizer_path)
+            .context("Failed to load tokenizer")?;
+
+        self.session = Some(session);
+        self.tokenizer = Some(tokenizer);
+
+        info!("Model loaded successfully");
+        Ok(())
     }
 
     pub fn is_model_downloaded(&self) -> Result<bool> {
         let model_path = self.model_path();
-        Ok(model_path.exists())
+        let tokenizer_path = self.tokenizer_path();
+        Ok(model_path.exists() && tokenizer_path.exists())
     }
 
     pub fn download_model(&self) -> Result<()> {
-        // For MVP, we'll implement a simple download
-        // In production, this would download from HuggingFace or similar
         info!("Downloading model: {}", self.config.model_name);
 
-        // TODO: Implement actual model download
-        // For now, create a placeholder file to indicate model is "downloaded"
-        let model_path = self.model_path();
-        fs::write(
-            model_path,
-            "# Model placeholder - implement actual download in Phase 1",
-        )?;
+        // URLs for BGE-small-en-v1.5 ONNX model
+        let base_url = "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/main";
+        
+        let files = vec![
+            ("model.onnx", "onnx/model.onnx"),
+            ("tokenizer.json", "tokenizer.json"),
+        ];
 
-        info!("Model downloaded successfully");
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()?;
+
+        for (filename, remote_path) in files {
+            let url = format!("{}/{}", base_url, remote_path);
+            let target_path = self.model_dir.join(filename);
+
+            info!("Downloading {} from {}", filename, url);
+
+            // Download file
+            let response = client.get(&url).send()?;
+            
+            if !response.status().is_success() {
+                anyhow::bail!("Failed to download {}: HTTP {}", filename, response.status());
+            }
+
+            let total_size = response
+                .content_length()
+                .ok_or_else(|| anyhow::anyhow!("Failed to get content length"))?;
+
+            // Create progress bar
+            let pb = ProgressBar::new(total_size);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{msg}\n[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                    .unwrap()
+                    .progress_chars("=>-"),
+            );
+            pb.set_message(format!("Downloading {}", filename));
+
+            // Stream download to file
+            let mut file = fs::File::create(&target_path)?;
+            let mut downloaded = 0u64;
+            let mut content = response;
+
+            use std::io::Write;
+            let mut buffer = [0; 8192];
+            
+            loop {
+                let bytes_read = std::io::Read::read(&mut content, &mut buffer)?;
+                if bytes_read == 0 {
+                    break;
+                }
+                file.write_all(&buffer[..bytes_read])?;
+                downloaded += bytes_read as u64;
+                pb.set_position(downloaded);
+            }
+
+            pb.finish_with_message(format!("✅ Downloaded {}", filename));
+        }
+
+        info!("All model files downloaded successfully");
         Ok(())
     }
 
     pub fn encode_text(&self, text: &str) -> Result<Embedding> {
-        // TODO: Implement actual encoding with ONNX Runtime
-        // For now, return a dummy embedding
-        info!("Encoding text: {}", &text[..text.len().min(50)]);
+        debug!("Encoding text: {}", &text[..text.len().min(50)]);
 
-        // Placeholder: return random-ish embedding based on text hash
-        let hash = text.len() % self.config.dimension;
-        let mut embedding = vec![0.0; self.config.dimension];
-        embedding[hash] = 1.0;
+        let session = self.session.as_ref()
+            .context("Model not initialized. Call init() first.")?;
+        let tokenizer = self.tokenizer.as_ref()
+            .context("Tokenizer not initialized. Call init() first.")?;
 
-        Ok(ndarray::Array1::from_vec(embedding))
+        // Tokenize the text
+        let encoding = tokenizer
+            .encode(text, true)
+            .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
+
+        let input_ids = encoding.get_ids();
+        let attention_mask = encoding.get_attention_mask();
+
+        // Truncate to max length
+        let max_len = self.config.max_length.min(input_ids.len());
+        let input_ids = &input_ids[..max_len];
+        let attention_mask = &attention_mask[..max_len];
+
+        // Prepare inputs as 2D arrays (batch_size=1, sequence_length=max_len)
+        let input_ids_array: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
+        let attention_mask_array: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
+
+        // Create ONNX input tensors
+        use ort::inputs;
+        let input_ids_tensor = ndarray::Array2::from_shape_vec(
+            (1, max_len),
+            input_ids_array,
+        )?;
+        let attention_mask_tensor = ndarray::Array2::from_shape_vec(
+            (1, max_len),
+            attention_mask_array,
+        )?;
+
+        // Run inference
+        let outputs = session.run(inputs![
+            "input_ids" => input_ids_tensor,
+            "attention_mask" => attention_mask_tensor,
+        ]?)?;
+
+        // Extract the embedding from the output
+        // BGE models output a tensor of shape [batch_size, hidden_size]
+        let output_tensor = outputs["last_hidden_state"]
+            .try_extract_tensor::<f32>()?;
+        
+        // Get the [CLS] token embedding (first token)
+        let shape = output_tensor.shape();
+        let hidden_size = shape[2];
+        
+        let embedding: Vec<f32> = output_tensor
+            .slice(ndarray::s![0, 0, ..])
+            .iter()
+            .copied()
+            .collect();
+
+        // Normalize the embedding (L2 normalization)
+        let embedding_array = Array1::from_vec(embedding);
+        let norm = embedding_array.mapv(|x| x * x).sum().sqrt();
+        let normalized = if norm > 0.0 {
+            embedding_array / norm
+        } else {
+            embedding_array
+        };
+
+        Ok(normalized)
     }
 
     pub fn encode_batch(&self, texts: Vec<String>) -> Result<Vec<Embedding>> {
-        // TODO: Implement efficient batch encoding
+        // For now, encode sequentially
+        // TODO: Implement true batch encoding for better performance
         texts
             .iter()
             .map(|text| self.encode_text(text))
@@ -72,7 +224,11 @@ impl ModelManager {
     }
 
     fn model_path(&self) -> PathBuf {
-        self.model_dir.join(format!("{}.onnx", self.config.model_name))
+        self.model_dir.join("model.onnx")
+    }
+
+    fn tokenizer_path(&self) -> PathBuf {
+        self.model_dir.join("tokenizer.json")
     }
 }
 
