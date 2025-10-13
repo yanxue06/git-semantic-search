@@ -15,7 +15,9 @@ pub struct IndexBuilder {
 }
 
 impl IndexBuilder {
-    pub fn new(model_manager: ModelManager) -> Result<Self> {
+    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
+        // Initialize the model before use
+        model_manager.init()?;
         let model_version = model_manager.model_version();
 
         Ok(Self {
@@ -26,7 +28,9 @@ impl IndexBuilder {
         })
     }
 
-    pub fn from_existing(index: SemanticIndex, model_manager: ModelManager) -> Result<Self> {
+    pub fn from_existing(index: SemanticIndex, mut model_manager: ModelManager) -> Result<Self> {
+        // Initialize the model before use
+        model_manager.init()?;
         let model_version = model_manager.model_version();
 
         Ok(Self {

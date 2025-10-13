@@ -14,7 +14,9 @@ pub struct SearchEngine {
 }
 
 impl SearchEngine {
-    pub fn new(model_manager: ModelManager) -> Result<Self> {
+    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
+        // Initialize the model before use
+        model_manager.init()?;
         Ok(Self { model_manager })
     }
 
