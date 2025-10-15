@@ -1,0 +1,38 @@
+name: Auto-merge Renovate PRs
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'renovate[bot]'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Auto-merge Renovate PR
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          
+          echo "📝 Processing Renovate PR #$PR_NUMBER"
+          
+          # Assign to yourself
+          gh pr edit $PR_NUMBER --add-assignee yanxue06
+          echo "✅ Assigned to yanxue06"
+          
+          # Enable auto-merge with rebase
+          gh pr merge $PR_NUMBER --auto --rebase
+          echo "✅ Auto-merge enabled (rebase)"
+          
+          # Add comment
+          gh pr comment $PR_NUMBER --body "> Auto-merge enabled for this Renovate PR. Will merge automatically once checks pass."
+          echo "✅ Comment added"
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
