@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Git operations
-git2 = "0.18"
+git2 = "0.20"
 
 # ONNX Runtime for embeddings
 ort = "2.0.0-rc.10"
