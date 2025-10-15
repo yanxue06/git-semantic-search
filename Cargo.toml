@@ -57,7 +57,7 @@ directories = "6.0"
 reqwest = { version = "0.12", features = ["blocking", "stream"] }
 
 # Tokenization for text processing
-tokenizers = "0.20"
+tokenizers = "0.22"
 
 [dev-dependencies]
 tempfile = "3.8"
