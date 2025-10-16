@@ -45,8 +45,12 @@ jobs:
           if grep -q "The next release version is" release-check.log; then
             echo "✅ Release will be published"
             echo "new-release-published=true" >> $GITHUB_OUTPUT
+          elif grep -q "There are no relevant changes" release-check.log; then
+            echo "⏭️ No relevant changes (use conventional commits: feat:, fix:, etc.)"
+            echo "new-release-published=false" >> $GITHUB_OUTPUT
           else
-            echo "⏭️ No release needed"
+            echo "❌ Unexpected output, assuming no release"
+            cat release-check.log
             echo "new-release-published=false" >> $GITHUB_OUTPUT
           fi
 
