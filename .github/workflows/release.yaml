@@ -82,6 +82,14 @@ jobs:
           cp artifacts/git-semantic-windows-x86_64.exe/git-semantic.exe binaries/git-semantic-windows-x86_64.exe
           ls -lah binaries/
 
+      - name: Install semantic-release and plugins
+        run: |
+          npm install \
+            semantic-release \
+            @semantic-release/changelog \
+            @semantic-release/exec \
+            @semantic-release/git
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
