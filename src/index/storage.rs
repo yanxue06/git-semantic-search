@@ -44,9 +44,6 @@ impl IndexStorage {
         Ok(index)
     }
 
-    pub fn exists(&self) -> bool {
-        self.index_path.exists()
-    }
 
     pub fn index_size_mb(&self) -> Result<f64> {
         let metadata = fs::metadata(&self.index_path)?;

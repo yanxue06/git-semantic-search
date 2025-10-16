@@ -102,10 +102,5 @@ impl RepositoryParser {
         Ok(commits)
     }
 
-    pub fn get_head_commit_hash(&self) -> Result<String> {
-        let head = self.repo.head()?;
-        let oid = head.target().context("HEAD has no target")?;
-        Ok(oid.to_string())
-    }
 }
 

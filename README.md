@@ -175,35 +175,9 @@ git-semantic stats
 - **Performance**: < 100ms inference time per query
 - **Storage**: ~0.04MB per 7 commits (highly efficient)
 
-## Project Structure
-
-```
-git-semantic/
-├── src/
-│   ├── main.rs           # CLI entry point
-│   ├── git/              # Git parsing and history extraction
-│   ├── embedding/        # ONNX model integration and tokenization
-│   ├── index/            # Binary storage and indexing
-│   ├── search/           # Semantic search engine
-│   └── cli/              # Command handlers and user interface
-├── .git/semantic-index/  # Generated index storage (auto-ignored)
-└── tests/                # Integration tests
-```
-
 ## Contributing
 
 Contributions are welcome! This is an early-stage project with lots of room for improvements.
-
-## License
-
-MIT
-
-## Roadmap
-
-- [x] Phase 1: MVP (Core functionality) ✅
-- [ ] Phase 2: Performance & usability
-- [ ] Phase 3: Advanced features (TUI, clustering, exports)
-- [ ] Phase 4: Polish & distribution
 
 ## Real Example Output
 
@@ -223,7 +197,4 @@ $ git-semantic search "ONNX integration"
    +    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
 ```
 
----
-
-**Status**: ✅ **Fully functional MVP ready for use!**
 

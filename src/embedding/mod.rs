@@ -1,4 +1,3 @@
-mod encode;
 mod model;
 
 pub use model::ModelManager;

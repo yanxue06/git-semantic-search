@@ -224,14 +224,6 @@ impl ModelManager {
         Ok(normalized)
     }
 
-    pub fn encode_batch(&mut self, texts: Vec<String>) -> Result<Vec<Embedding>> {
-        // For now, encode sequentially
-        // TODO: Implement true batch encoding for better performance
-        texts
-            .iter()
-            .map(|text| self.encode_text(text))
-            .collect()
-    }
 
     pub fn model_version(&self) -> String {
         self.config.model_name.clone()

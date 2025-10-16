@@ -1,6 +1,5 @@
 mod builder;
 mod storage;
-mod update;
 
 pub use builder::IndexBuilder;
 pub use storage::IndexStorage;
