@@ -15,8 +15,7 @@ jobs:
     name: Check if release is needed
     runs-on: ubuntu-latest
     outputs:
-      new-release-published: ${{ steps.semantic.outputs.new-release-published }}
-      new-release-version: ${{ steps.semantic.outputs.new-release-version }}
+      new-release-published: ${{ steps.check.outputs.new-release-published }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -37,21 +36,18 @@ jobs:
             @semantic-release/git
 
       - name: Check if release needed
-        id: semantic
+        id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npx semantic-release --dry-run > release-output.txt 2>&1 || true
-          if grep -q "Published release" release-output.txt || grep -q "There are no relevant changes" release-output.txt; then
-            if grep -q "Published release" release-output.txt; then
-              echo "new-release-published=true" >> $GITHUB_OUTPUT
-              version=$(grep -oP "Published release \K[0-9]+\.[0-9]+\.[0-9]+" release-output.txt || echo "")
-              echo "new-release-version=$version" >> $GITHUB_OUTPUT
-              echo "✅ Release will be published: $version"
-            else
-              echo "new-release-published=false" >> $GITHUB_OUTPUT
-              echo "⏭️ No relevant changes, skipping release"
-            fi
+          npx semantic-release --dry-run 2>&1 | tee release-check.log
+          
+          if grep -q "The next release version is" release-check.log; then
+            echo "✅ Release will be published"
+            echo "new-release-published=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️ No release needed"
+            echo "new-release-published=false" >> $GITHUB_OUTPUT
           fi
 
   build:
