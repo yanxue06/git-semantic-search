@@ -42,9 +42,11 @@ jobs:
         run: |
           npx semantic-release --dry-run 2>&1 | tee release-check.log
           
-          if grep -q "The next release version is" release-check.log; then
-            echo "✅ Release will be published"
+          if grep -qE "(The next release version is|There is no previous release)" release-check.log; then
+            VERSION=$(grep -oP "version is \K[0-9]+\.[0-9]+\.[0-9]+" release-check.log | head -1)
+            echo "✅ Release will be published: v$VERSION"
             echo "new-release-published=true" >> $GITHUB_OUTPUT
+            echo "new-release-version=$VERSION" >> $GITHUB_OUTPUT
           elif grep -q "There are no relevant changes" release-check.log; then
             echo "⏭️ No relevant changes (use conventional commits: feat:, fix:, etc.)"
             echo "new-release-published=false" >> $GITHUB_OUTPUT
