@@ -1,20 +1,88 @@
-name: semantic-release 
+name: Release
 
-on: 
-  push: master 
+on:
+  push:
+    branches:
+      - main
 
-permissions: 
-  contents: read
-  packages: write
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 
-jobs: 
-  release: 
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+            binary_name: git-semantic
+            asset_name: git-semantic-linux-x86_64
+          - os: macos-13
+            platform: macos
+            target: x86_64-apple-darwin
+            binary_name: git-semantic
+            asset_name: git-semantic-macos-x86_64
+          - os: macos-latest
+            platform: macos-arm
+            target: aarch64-apple-darwin
+            binary_name: git-semantic
+            asset_name: git-semantic-macos-arm64
+          - os: windows-latest
+            platform: windows
+            target: x86_64-pc-windows-msvc
+            binary_name: git-semantic.exe
+            asset_name: git-semantic-windows-x86_64.exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/release/${{ matrix.binary_name }}
+
+  release:
+    name: Release
+    needs: build
     runs-on: ubuntu-latest
-    steps: 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with: 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-   
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: ./artifacts
+
+      - name: Prepare binaries for release
+        run: |
+          mkdir -p binaries
+          cp artifacts/git-semantic-linux-x86_64/git-semantic binaries/git-semantic-linux-x86_64
+          cp artifacts/git-semantic-macos-x86_64/git-semantic binaries/git-semantic-macos-x86_64
+          cp artifacts/git-semantic-macos-arm64/git-semantic binaries/git-semantic-macos-arm64
+          cp artifacts/git-semantic-windows-x86_64.exe/git-semantic.exe binaries/git-semantic-windows-x86_64.exe
+          ls -lah binaries/
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

@@ -1,0 +1,46 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "sed -i.bak 's/^version = .*/version = \"${nextRelease.version}\"/' Cargo.toml && rm Cargo.toml.bak"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "binaries/git-semantic-linux-x86_64",
+            "name": "git-semantic-linux-x86_64",
+            "label": "git-semantic-linux-x86_64"
+          },
+          {
+            "path": "binaries/git-semantic-macos-x86_64",
+            "name": "git-semantic-macos-x86_64",
+            "label": "git-semantic-macos-x86_64"
+          },
+          {
+            "path": "binaries/git-semantic-macos-arm64",
+            "name": "git-semantic-macos-arm64",
+            "label": "git-semantic-macos-arm64"
+          },
+          {
+            "path": "binaries/git-semantic-windows-x86_64.exe",
+            "name": "git-semantic-windows-x86_64.exe",
+            "label": "git-semantic-windows-x86_64.exe"
+          }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["Cargo.toml", "Cargo.lock", "CHANGELOG.md"],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ]
+  ]
+}
