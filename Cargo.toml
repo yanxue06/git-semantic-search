@@ -2,10 +2,10 @@
 name = "git-semantic"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Yan Xue <yanxue@uwaterloo.ca>"]
 description = "Semantic search for git history using natural language"
 license = "MIT"
-repository = "https://github.com/yourusername/git-semantic"
+repository = "https://github.com/yanxue06/git-semantic"
 keywords = ["git", "search", "semantic", "cli", "embeddings"]
 categories = ["command-line-utilities", "development-tools"]
 
@@ -21,7 +21,7 @@ git2 = "0.20"
 ort = "2.0.0-rc.10"
 
 # Numerical arrays
-ndarray = "0.17"
+ndarray = "0.16"
 
 # CLI framework
 clap = { version = "4.5", features = ["derive", "cargo"] }

@@ -1,0 +1,20 @@
+name: semantic-release 
+
+on: 
+  push: master 
+
+permissions: 
+  contents: read
+  packages: write
+
+jobs: 
+  release: 
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with: 
+
+   
