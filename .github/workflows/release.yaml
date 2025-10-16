@@ -11,8 +11,53 @@ permissions:
   pull-requests: write
 
 jobs:
+  check:
+    name: Check if release is needed
+    runs-on: ubuntu-latest
+    outputs:
+      new-release-published: ${{ steps.semantic.outputs.new-release-published }}
+      new-release-version: ${{ steps.semantic.outputs.new-release-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+
+      - name: Install semantic-release and plugins
+        run: |
+          npm install \
+            semantic-release \
+            @semantic-release/changelog \
+            @semantic-release/exec \
+            @semantic-release/git
+
+      - name: Check if release needed
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release --dry-run > release-output.txt 2>&1 || true
+          if grep -q "Published release" release-output.txt || grep -q "There are no relevant changes" release-output.txt; then
+            if grep -q "Published release" release-output.txt; then
+              echo "new-release-published=true" >> $GITHUB_OUTPUT
+              version=$(grep -oP "Published release \K[0-9]+\.[0-9]+\.[0-9]+" release-output.txt || echo "")
+              echo "new-release-version=$version" >> $GITHUB_OUTPUT
+              echo "✅ Release will be published: $version"
+            else
+              echo "new-release-published=false" >> $GITHUB_OUTPUT
+              echo "⏭️ No relevant changes, skipping release"
+            fi
+          fi
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: check
+    if: needs.check.outputs.new-release-published == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -55,7 +100,8 @@ jobs:
 
   release:
     name: Release
-    needs: build
+    needs: [check, build]
+    if: needs.check.outputs.new-release-published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
