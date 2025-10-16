@@ -1,27 +1,10 @@
 # git-semantic
 
-**Semantic search for git history using natural language**
-
-Find commits by what they mean, not just what they say.
-
-## The Problem
-
-Traditional git search requires exact keywords:
-```bash
-git log --grep="race"           # 847 results, none relevant
-git log -S "mutex"              # 12 results, but not the one you need
-```
-
-You spend 20 minutes scrolling through `git log`, trying different keywords.
-
-## The Solution
+**Search your git history using natural language - find commits by what they mean, not just what they say.**
 
 ```bash
-git-semantic search "fixed race condition in authentication"
-```
+$ git-semantic search "fixed race condition in authentication"
 
-Results in < 100ms:
-```
 🎯 Most Relevant Commits:
 
 1. abc1234 - Resolve concurrent login session handling (0.89 similarity)
@@ -31,60 +14,60 @@ Results in < 100ms:
    Author: Bob Martinez, 4 months ago
 ```
 
-You found it in 3 seconds instead of 20 minutes.
+Stop scrolling through hundreds of commits with `git log --grep`. Just describe what you're looking for in plain English.
+
+## Why?
+
+Traditional git search is **keyword-based**. You need to guess the exact words the author used:
+
+```bash
+git log --grep="race"     # 847 results 😵
+git log -S "mutex"        # Maybe? 🤷
+```
+
+**git-semantic** understands **meaning**. Search for "race condition" and find commits about "concurrent access" or "synchronization bugs" - even if those exact words aren't in the message.
 
 ## Features
 
-- 🔍 **Semantic Search** - Find commits by meaning, not just keywords
-- 🚀 **Fast** - Search returns in < 100ms
-- 🔒 **Private** - Everything runs locally, no data leaves your machine
-- 📦 **Zero Config** - Works out of the box, no API keys needed
-- 🎯 **Smart Filtering** - Filter by author, date, file, and more
+- 🔍 **Natural language search** - "fix memory leak" finds more than just those exact words
+- 🚀 **Fast** - Results in < 100ms
+- 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
+- 📦 **Zero config** - Works out of the box
+- 🎯 **Smart filtering** - By author, date, file, and more
 
 ## Installation
 
-### From Source (Current)
+### From Release (Recommended)
+
+Download the latest binary for your platform from [Releases](https://github.com/yanxue06/git-semantic-search/releases).
 
 ```bash
-git clone https://github.com/yanxue06/git-semantic-search
-cd git-semantic-search
-cargo build --release
-cargo install --path .
+# macOS/Linux
+chmod +x git-semantic-*
+mv git-semantic-* /usr/local/bin/git-semantic
+
+# Windows
+# Move git-semantic-windows-x86_64.exe to a directory in your PATH
 ```
 
-### Package Managers (Coming Soon)
+### From Source
 
 ```bash
-# Cargo
-cargo install git-semantic
-
-# Homebrew (macOS)
-brew install git-semantic
+cargo install --git https://github.com/yanxue06/git-semantic-search
 ```
 
 ## Quick Start
 
-### 1. Initialize (one-time setup)
-
 ```bash
+# 1. One-time setup (downloads AI model, ~130MB)
 git-semantic init
-```
 
-This downloads the BGE-small-en-v1.5 ONNX model (~130MB) - only needed once.
-
-### 2. Index your repository
-
-```bash
+# 2. Index your repository
 cd /path/to/your/repo
 git-semantic index
-```
 
-### 3. Search!
-
-```bash
-git-semantic search "fix memory leak"
-git-semantic search "refactor authentication"
-git-semantic search "add new feature"
+# 3. Search!
+git-semantic search "your query here"
 ```
 
 ## Usage
@@ -92,109 +75,108 @@ git-semantic search "add new feature"
 ### Basic Search
 
 ```bash
-# Search for commits
-git-semantic search "your natural language query"
-
-# Limit results
-git-semantic search "bug fix" -n 5
+git-semantic search "fix memory leak"
+git-semantic search "add authentication feature"
+git-semantic search "refactor payment logic"
 ```
 
-### Advanced Filtering
+### Filters
 
 ```bash
-# Filter by author
+# By author
 git-semantic search "refactor" --author=alice
 
-# Filter by date
-git-semantic search "bug" --after=2024-01-01 --before=2024-12-31
+# By date
+git-semantic search "bug fix" --after=2024-01-01
 
-# Filter by file
+# By file
 git-semantic search "optimization" --file=src/auth.rs
+
+# Limit results
+git-semantic search "feature" -n 5
 ```
 
 ### Index Management
 
 ```bash
-# Quick index (messages only - faster)
-git-semantic index --quick
-
-# Full index (messages + diffs - more thorough)
-git-semantic index --full
-
 # Update index with new commits
 git-semantic update
 
 # Show index statistics
 git-semantic stats
+
+# Quick index (messages only, faster)
+git-semantic index --quick
+
+# Full index (messages + diffs, more context)
+git-semantic index --full
 ```
 
 ## How It Works
 
-1. **Indexing**: Parses your git history and generates semantic embeddings for each commit using the BGE-small-en-v1.5 ONNX model
-2. **Storage**: Stores embeddings in `.git/semantic-index` using efficient binary serialization (automatically ignored by git)
-3. **Search**: Converts your query to an embedding and finds the most similar commits using cosine similarity
-4. **ONNX Runtime**: Uses ONNX Runtime for fast, local AI inference without external dependencies
+1. **Downloads BGE-small-en-v1.5** - A compact AI model (130MB) for semantic embeddings
+2. **Indexes your repo** - Converts each commit into a 384-dimensional vector
+3. **Stores locally** - Binary index saved in `.git/semantic-index` (ignored by git)
+4. **Searches by meaning** - Your query becomes a vector, finds similar commit vectors using cosine similarity
+5. **ONNX Runtime** - Fast local inference, no cloud services needed
 
-## Development Status
+**Stored locations:**
+- Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS)
+- Index: `.git/semantic-index` (per repository)
 
-**✅ MVP Complete - Fully Functional!**
+## Technical Details
 
-- [x] Project structure and dependencies
-- [x] CLI interface with clap
-- [x] Git history parser implementation
-- [x] ONNX embedding model integration (BGE-small-en-v1.5)
-- [x] Vector storage and search with binary serialization
-- [x] Progress bars and user feedback
-- [x] HuggingFace model download with progress tracking
-- [x] Tokenization and L2 normalization
-- [x] Semantic search with similarity scoring
+- **Model**: BGE-small-en-v1.5 (BAAI)
+- **Runtime**: ONNX Runtime for fast local inference
+- **Storage**: Bincode serialization (~0.04MB per 7 commits)
+- **Search**: Cosine similarity with L2 normalization
+- **Inference**: < 100ms per query
 
-**Coming Soon:**
-- Phase 2: Performance optimizations (parallel processing, compression)
-- Phase 3: Interactive TUI, advanced features
-- Phase 4: Distribution and polish
-
-## Requirements
-
-- Git repository
-- ~130MB disk space for the model
-- Rust 1.70+ (for building from source)
-
-## Technical Implementation
-
-### Core Technologies
-- **ONNX Runtime**: Fast, local AI inference with the `ort` crate
-- **BGE Embeddings**: BAAI's BGE-small-en-v1.5 model for high-quality semantic embeddings
-- **Tokenization**: BERT-style tokenization with `tokenizers` crate
-- **Binary Storage**: Efficient `bincode` serialization for index storage
-- **Git Integration**: Uses `git2` crate for robust git history parsing
-
-### Model Details
-- **Model**: BGE-small-en-v1.5 (384-dimensional embeddings)
-- **Size**: ~130MB ONNX model + tokenizer
-- **Performance**: < 100ms inference time per query
-- **Storage**: ~0.04MB per 7 commits (highly efficient)
-
-## Contributing
-
-Contributions are welcome! This is an early-stage project with lots of room for improvements.
-
-## Real Example Output
+## Real Example
 
 ```bash
 $ git-semantic search "ONNX integration"
 
 🎯 Most Relevant Commits for: "ONNX integration"
 
-1. 28e9c31 - Implement ONNX model inference and HuggingFace download (0.69 similarity)
+1. 4d8acb9 - docs: Update README with complete ONNX integration details (0.73 similarity)
+   Author: yan, 2025-10-13 08:17:23 UTC
+   -# git-semantic (IN DEVELOPMENT)
+   +# git-semantic
+
+2. 776ff32 - feat: Complete ONNX integration with real BGE embeddings (0.73 similarity)
+   Author: yan, 2025-10-13 07:24:37 UTC
+   -    let engine = SearchEngine::new(model_manager)?;
+   +    let mut engine = SearchEngine::new(model_manager)?;
+
+3. 28e9c31 - Implement ONNX model inference and HuggingFace download (0.69 similarity)
    Author: yan, 2025-10-13 06:50:59 UTC
    +use indicatif::{ProgressBar, ProgressStyle};
    +use ndarray::Array1;
-
-2. 079773d - Initialize model in IndexBuilder and SearchEngine (0.59 similarity)
-   Author: yan, 2025-10-13 06:51:05 UTC
-   -    pub fn new(model_manager: ModelManager) -> Result<Self> {
-   +    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
 ```
 
+## Contributing
 
+Contributions welcome! Please use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```bash
+feat: add new search feature
+fix: resolve memory leak in indexing
+docs: update installation instructions
+```
+
+Releases are automated via semantic-release. Push to `main` and let CI handle versioning and binary builds.
+
+## Requirements
+
+- Git repository (obviously!)
+- ~130MB disk space for the AI model
+- Rust 1.70+ (if building from source)
+
+## License
+
+MIT
+
+---
+
+**Built with:** Rust 🦀 | ONNX Runtime | BGE Embeddings | ❤️
