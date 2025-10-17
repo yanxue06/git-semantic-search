@@ -6,6 +6,9 @@ authors = ["Yan Xue <yanxue@uwaterloo.ca>"]
 description = "Semantic search for git history using natural language"
 license = "MIT"
 repository = "https://github.com/yanxue06/git-semantic-search"
+homepage = "https://github.com/yanxue06/git-semantic-search"
+documentation = "https://github.com/yanxue06/git-semantic-search#readme"
+readme = "README.md"
 keywords = ["git", "search", "semantic", "cli", "embeddings"]
 categories = ["command-line-utilities", "development-tools"]
 
