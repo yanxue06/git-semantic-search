@@ -39,15 +39,31 @@ git log -S "mutex"        # Maybe? 🤷
 
 ### From Release (Recommended)
 
-Download the latest binary for your platform from [Releases](https://github.com/yanxue06/git-semantic-search/releases).
-
+**macOS (Intel):**
 ```bash
-# macOS/Linux
-chmod +x git-semantic-*
-mv git-semantic-* /usr/local/bin/git-semantic
+curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-macos-x86_64
+chmod +x git-semantic
+sudo mv git-semantic /usr/local/bin/
+```
 
-# Windows
-# Move git-semantic-windows-x86_64.exe to a directory in your PATH
+**macOS (Apple Silicon):**
+```bash
+curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-macos-arm64
+chmod +x git-semantic
+sudo mv git-semantic /usr/local/bin/
+```
+
+**Linux:**
+```bash
+curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-linux-x86_64
+chmod +x git-semantic
+sudo mv git-semantic /usr/local/bin/
+```
+
+**Windows (PowerShell):**
+```powershell
+curl -L -o git-semantic.exe https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-windows-x86_64.exe
+# Move to a directory in your PATH, e.g., C:\Program Files\
 ```
 
 ### From Source
