@@ -1,3 +1,16 @@
+## [1.0.1](https://github.com/yanxue06/git-semantic-search/compare/v1.0.0...v1.0.1) (2025-10-17)
+
+
+### Bug Fixes
+
+* **deps:** update rust crate bincode to v2 ([f889892](https://github.com/yanxue06/git-semantic-search/commit/f88989265e2224ef45e6e44cbcadf7a760bfffce))
+* **deps:** update rust crate bincode to v2 ([ba28079](https://github.com/yanxue06/git-semantic-search/commit/ba28079bd131870ae54621380542cc1d8e65ccad))
+* **deps:** update rust crate bincode to v2 ([3efa6ba](https://github.com/yanxue06/git-semantic-search/commit/3efa6ba43a85ea23fb4acdab1fb0331c9ea65c7e))
+* **deps:** update rust crate thiserror to v2 ([accad2c](https://github.com/yanxue06/git-semantic-search/commit/accad2ccec942862e1b027a9c347bd41c4543de9))
+* downgrade bincode to 1.3 for compatibility ([3095058](https://github.com/yanxue06/git-semantic-search/commit/3095058a04ba5255408bcda4d28daa0d3a6fba33))
+* only auto-merge minor/patch Renovate PRs ([d53c327](https://github.com/yanxue06/git-semantic-search/commit/d53c3279aa2b07980f940cd5f76930cd61a730b2))
+* pin bincode back to 1.3 ([7353c13](https://github.com/yanxue06/git-semantic-search/commit/7353c1355e1ef7d98bafa3751ac025de8e70deef))
+
 # 1.0.0 (2025-10-16)
 
 
