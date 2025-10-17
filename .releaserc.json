@@ -3,7 +3,6 @@
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    "@semantic-release/changelog",
     [
       "@semantic-release/exec",
       {
@@ -40,7 +39,7 @@
     [
       "@semantic-release/git",
       {
-        "assets": ["Cargo.toml", "Cargo.lock", "CHANGELOG.md"],
+        "assets": ["Cargo.toml", "Cargo.lock"],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ]
