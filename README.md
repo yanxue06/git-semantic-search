@@ -160,8 +160,6 @@ fix: resolve memory leak in indexing
 docs: update installation instructions
 ```
 
-Releases are automated via semantic-release. Push to `main` and let CI handle versioning and binary builds.
-
 ## Requirements
 
 - Git repository (obviously!)
