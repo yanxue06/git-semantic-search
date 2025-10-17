@@ -37,7 +37,27 @@ git log -S "mutex"        # Maybe? 🤷
 
 ## Installation
 
-### From Release 
+### From Source
+
+```bash
+cargo install --git https://github.com/yanxue06/git-semantic-search
+```
+
+## Quick Start
+
+```bash
+# 1. One-time setup (downloads AI model, ~130MB)
+git-semantic init
+
+# 2. Index your repository
+cd /path/to/your/repo
+git-semantic index
+
+# 3. Search!
+git-semantic search "your query here"
+```
+
+### From Release (Recommended) 
 
 **macOS (Intel):**
 ```bash
@@ -64,26 +84,6 @@ sudo mv git-semantic /usr/local/bin/
 ```powershell
 curl -L -o git-semantic.exe https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-windows-x86_64.exe
 # Move to a directory in your PATH, e.g., C:\Program Files\
-```
-
-### From Source
-
-```bash
-cargo install --git https://github.com/yanxue06/git-semantic-search
-```
-
-## Quick Start
-
-```bash
-# 1. One-time setup (downloads AI model, ~130MB)
-git-semantic init
-
-# 2. Index your repository
-cd /path/to/your/repo
-git-semantic index
-
-# 3. Search!
-git-semantic search "your query here"
 ```
 
 ## Usage
