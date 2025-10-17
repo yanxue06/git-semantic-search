@@ -42,6 +42,12 @@ impl IndexBuilder {
     }
 
     pub fn add_commit(&mut self, commit: CommitInfo) -> Result<()> {
+        // Check if this commit already exists to prevent duplicates
+        if self.entries.iter().any(|e| e.commit.hash == commit.hash) {
+            debug!("Commit {} already indexed, skipping", &commit.hash[..7]);
+            return Ok(());
+        }
+
         debug!("Adding commit: {}", &commit.hash[..7]);
 
         // Generate text representation
