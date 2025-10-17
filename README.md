@@ -197,4 +197,4 @@ MIT
 
 ---
 
-**Built with:** Rust 🦀 | ONNX Runtime | BGE Embeddings | ❤️
+**Built with:** Rust 🦀 and ❤️
