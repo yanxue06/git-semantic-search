@@ -30,5 +30,8 @@
       ],
       "automerge": false
     }
+  ],
+  "schedule": [
+    "before 5am on monday" 
   ]
 }
