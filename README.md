@@ -37,7 +37,7 @@ git log -S "mutex"        # Maybe? 🤷
 
 ## Installation
 
-### From Source (Reccommended)
+### From Source (Recommended)
 
 ```bash
 cargo install --git https://github.com/yanxue06/git-semantic-search
@@ -72,7 +72,7 @@ curl -L -o git-semantic.exe https://github.com/yanxue06/git-semantic-search/rele
 # Move to a directory in your PATH, e.g., C:\Program Files\
 ```
 
-If these don't work, you can also, also click into release and download the packages manually from there. 
+If these don't work, you can also click into the [releases page](https://github.com/yanxue06/git-semantic-search/releases) and download the binaries manually. 
 
 ## Quick Start
 
