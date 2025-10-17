@@ -42,42 +42,13 @@ git log -S "mutex"        # Maybe? 🤷
 
 ## Installation
 
-### From Crates (Recommended)
+### Using Cargo (Recommended)
 
 ```bash
 cargo install git-semantic
 ```
 
-### From Release 
-
-**macOS (Intel):**
-```bash
-curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-macos-x86_64
-chmod +x git-semantic
-sudo mv git-semantic /usr/local/bin/
-```
-
-**macOS (Apple Silicon):**
-```bash
-curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-macos-arm64
-chmod +x git-semantic
-sudo mv git-semantic /usr/local/bin/
-```
-
-**Linux:**
-```bash
-curl -L -o git-semantic https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-linux-x86_64
-chmod +x git-semantic
-sudo mv git-semantic /usr/local/bin/
-```
-
-**Windows (PowerShell):**
-```powershell
-curl -L -o git-semantic.exe https://github.com/yanxue06/git-semantic-search/releases/latest/download/git-semantic-windows-x86_64.exe
-# Move to a directory in your PATH, e.g., C:\Program Files\
-```
-
-If these don't work, you can also click into the [releases page](https://github.com/yanxue06/git-semantic-search/releases) and download the binaries manually. 
+Alternatively, you can also install from the latest release compatible with your OS on the [releases page](https://github.com/yanxue06/git-semantic-search/releases). 
 
 ## Quick Start
 
