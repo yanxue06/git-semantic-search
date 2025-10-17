@@ -2,7 +2,7 @@
 name = "git-semantic"
 version = "1.0.2"
 edition = "2021"
-authors = ["Yan Xue <yanxue@uwaterloo.ca>"]
+authors = ["Yan Xue"]
 description = "Semantic search for git history using natural language"
 license = "MIT"
 repository = "https://github.com/yanxue06/git-semantic-search"
