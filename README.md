@@ -42,10 +42,10 @@ git log -S "mutex"        # Maybe? 🤷
 
 ## Installation
 
-### From Source (Recommended)
+### From Crates (Recommended)
 
 ```bash
-cargo install --git https://github.com/yanxue06/git-semantic-search
+cargo install git-semantic
 ```
 
 ### From Release 
