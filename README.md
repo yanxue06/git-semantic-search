@@ -37,7 +37,7 @@ git log -S "mutex"        # Maybe? 🤷
 
 ## Installation
 
-### From Release (Recommended)
+### From Release 
 
 **macOS (Intel):**
 ```bash
