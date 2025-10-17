@@ -1,5 +1,10 @@
 # git-semantic
 
+[![Release](https://img.shields.io/github/v/release/yanxue06/git-semantic-search?style=flat-square)](https://github.com/yanxue06/git-semantic-search/releases)
+[![Downloads](https://img.shields.io/github/downloads/yanxue06/git-semantic-search/total?style=flat-square&label=downloads)](https://github.com/yanxue06/git-semantic-search/releases)
+[![Crates.io](https://img.shields.io/crates/v/git-semantic?style=flat-square)](https://crates.io/crates/git-semantic)
+[![License](https://img.shields.io/github/license/yanxue06/git-semantic-search?style=flat-square)](LICENSE)
+
 **Search your git history using natural language - find commits by what they mean, not just what they say.**
 
 ```bash
