@@ -87,7 +87,7 @@ git-semantic search "bug fix" --after=2024-01-01
 # By file
 git-semantic search "optimization" --file=src/auth.rs
 
-# Limit results
+# Manually decide number of matches with the -n flag 
 git-semantic search "feature" -n 5
 ```
 
@@ -123,7 +123,7 @@ git-semantic index --full
 
 - **Model**: BGE-small-en-v1.5 (BAAI)
 - **Runtime**: ONNX Runtime for fast local inference
-- **Storage**: Bincode serialization (~0.04MB per 7 commits)
+- **Storage**: Bincode serialization (~3KB per Commit)
 - **Search**: Cosine similarity with L2 normalization
 - **Inference**: < 100ms per query
 
