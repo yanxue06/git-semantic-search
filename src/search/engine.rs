@@ -54,7 +54,10 @@ impl SearchEngine {
         results = filter_engine.apply(results)?;
 
         // Sort by similarity
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        results.sort_by(|a, b| {
+            b.similarity.partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Take top N results
         results.truncate(num_results);
