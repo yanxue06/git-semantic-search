@@ -51,7 +51,6 @@ impl ModelManager {
             );
         }
 
-        // Create ONNX Runtime session
         let session = Session::builder()?
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .with_intra_threads(4)?
@@ -96,7 +95,6 @@ impl ModelManager {
 
             info!("Downloading {} from {}", filename, url);
 
-            // Download file
             let response = client.get(&url).send()?;
             
             if !response.status().is_success() {
@@ -107,7 +105,6 @@ impl ModelManager {
                 .content_length()
                 .ok_or_else(|| anyhow::anyhow!("Failed to get content length"))?;
 
-            // Create progress bar
             let pb = ProgressBar::new(total_size);
             pb.set_style(
                 ProgressStyle::default_bar()
@@ -117,7 +114,6 @@ impl ModelManager {
             );
             pb.set_message(format!("Downloading {}", filename));
 
-            // Stream download to file
             let mut file = fs::File::create(&target_path)?;
             let mut downloaded = 0u64;
             let mut content = response;
@@ -150,7 +146,6 @@ impl ModelManager {
         let tokenizer = self.tokenizer.as_ref()
             .context("Tokenizer not initialized. Call init() first.")?;
 
-        // Tokenize the text
         let encoding = tokenizer
             .encode(text, true)
             .map_err(|e| anyhow::anyhow!("Tokenization failed: {}", e))?;
@@ -158,17 +153,14 @@ impl ModelManager {
         let input_ids = encoding.get_ids();
         let attention_mask = encoding.get_attention_mask();
 
-        // Truncate to max length
         let max_len = self.config.max_length.min(input_ids.len());
         let input_ids = &input_ids[..max_len];
         let attention_mask = &attention_mask[..max_len];
 
-        // Prepare inputs as 2D arrays (batch_size=1, sequence_length=max_len)
         let input_ids_array: Vec<i64> = input_ids.iter().map(|&x| x as i64).collect();
         let attention_mask_array: Vec<i64> = attention_mask.iter().map(|&x| x as i64).collect();
         let token_type_ids_array: Vec<i64> = vec![0; max_len]; // BERT uses 0 for all tokens
 
-        // Create ONNX input tensors
         use ort::value::Value;
         
         let input_ids_array_2d = ndarray::Array2::from_shape_vec(
@@ -188,7 +180,6 @@ impl ModelManager {
         let attention_mask_tensor = Value::from_array((attention_mask_array_2d.shape(), attention_mask_array_2d.as_slice().unwrap().to_vec()))?;
         let token_type_ids_tensor = Value::from_array((token_type_ids_array_2d.shape(), token_type_ids_array_2d.as_slice().unwrap().to_vec()))?;
 
-        // Run inference
         let inputs = ort::inputs![
             "input_ids" => input_ids_tensor,
             "attention_mask" => attention_mask_tensor,
@@ -196,18 +187,16 @@ impl ModelManager {
         ];
         let outputs = session.run(inputs)?;
 
-        // Extract the embedding from the output
         // BGE models output a tensor of shape [batch_size, sequence_length, hidden_size]
         let output_tensor = outputs["last_hidden_state"]
             .try_extract_tensor::<f32>()?;
-        
-        // Get the [CLS] token embedding (first token)
+
         let (shape, data) = output_tensor;
         let _batch_size = shape[0] as usize;
         let seq_len = shape[1] as usize;
         let hidden_size = shape[2] as usize;
-        
-        // Extract the [CLS] token (index 0) from the first batch
+
+        // Extract the [CLS] token (first token) from the first batch
         let cls_start = 0 * seq_len * hidden_size + 0 * hidden_size;
         let cls_end = cls_start + hidden_size;
         let embedding: Vec<f32> = data[cls_start..cls_end].to_vec();
