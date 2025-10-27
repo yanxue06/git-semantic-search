@@ -95,7 +95,7 @@ jobs:
         run: cargo build --release
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.asset_name }}
           path: target/release/${{ matrix.binary_name }}
@@ -117,7 +117,7 @@ jobs:
           node-version: 'lts/*'
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: ./artifacts
 
