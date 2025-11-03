@@ -24,7 +24,7 @@ git2 = "0.20"
 ort = "2.0.0-rc.10"
 
 # Numerical arrays
-ndarray = "0.16"
+ndarray = "0.17"
 
 # CLI framework
 clap = { version = "4.5", features = ["derive", "cargo"] }
