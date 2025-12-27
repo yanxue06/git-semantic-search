@@ -19,10 +19,15 @@ impl DiffExtractor {
 
         let summary = Self::format_diff(&diff)?;
 
-        // Limit size to avoid huge diffs
         const MAX_DIFF_SIZE: usize = 10_000;
         if summary.len() > MAX_DIFF_SIZE {
-            Ok(summary[..MAX_DIFF_SIZE].to_string() + "\n... (truncated)")
+            let truncate_at = summary
+                .char_indices()
+                .take_while(|(i, _)| *i < MAX_DIFF_SIZE)
+                .last()
+                .map(|(i, c)| i + c.len_utf8())
+                .unwrap_or(MAX_DIFF_SIZE); // Find valid UTF-8 boundary to handle multi-byte chars (e.g. emojis)
+            Ok(summary[..truncate_at].to_string() + "\n... (truncated)")
         } else {
             Ok(summary)
         }
@@ -45,6 +50,24 @@ impl DiffExtractor {
         })?;
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_truncate_at_utf8_char_boundary() {
+        const MAX_SIZE: usize = 10;
+        let s = "1234567890🔍abc"; // emoji at byte 10-13
+
+        let truncate_at = s
+            .char_indices()
+            .take_while(|(i, _)| *i < MAX_SIZE)
+            .last()
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(MAX_SIZE);
+
+        assert_eq!(&s[..truncate_at], "1234567890"); // Includes chars starting before limit, excludes emoji
     }
 }
 
