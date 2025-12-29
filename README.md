@@ -13,10 +13,10 @@ $ git-semantic search "fixed race condition in authentication"
 
 🎯 Most Relevant Commits:
 
-1. abc1234 - Resolve concurrent login session handling (0.89 similarity)
+1. abc1234 - Resolved concurrent login session handling (0.89 similarity)
    Author: Alice Chen, 6 months ago
    
-2. def5678 - Synchronize user token refresh logic (0.84 similarity)
+2. def5678 - Synchronized user token refresh logic (0.84 similarity)
    Author: Bob Martinez, 4 months ago
 ```
 
