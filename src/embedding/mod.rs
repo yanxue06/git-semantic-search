@@ -1,5 +1,7 @@
+mod error;
 mod model;
 
+pub use error::EmbeddingError;
 pub use model::ModelManager;
 
 use ndarray::Array1;

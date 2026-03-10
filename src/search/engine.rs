@@ -1,4 +1,3 @@
-use anyhow::Result;
 use ndarray::Array1;
 use tracing::debug;
 
@@ -7,15 +6,14 @@ use crate::embedding::ModelManager;
 use crate::index::SemanticIndex;
 
 use super::filter::FilterEngine;
-use super::SearchResult;
+use super::{SearchError, SearchResult};
 
 pub struct SearchEngine {
     model_manager: ModelManager,
 }
 
 impl SearchEngine {
-    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
-        // Initialize the model before use
+    pub fn new(mut model_manager: ModelManager) -> Result<Self, SearchError> {
         model_manager.init()?;
         Ok(Self { model_manager })
     }
@@ -26,13 +24,11 @@ impl SearchEngine {
         query: &str,
         num_results: usize,
         filters: SearchFilters,
-    ) -> Result<Vec<SearchResult>> {
+    ) -> Result<Vec<SearchResult>, SearchError> {
         debug!("Searching for: {}", query);
 
-        // Generate query embedding
         let query_embedding = self.model_manager.encode_text(query)?;
 
-        // Compute similarities
         let mut results: Vec<SearchResult> = index
             .entries
             .iter()
@@ -49,20 +45,16 @@ impl SearchEngine {
             })
             .collect();
 
-        // Apply filters
         let filter_engine = FilterEngine::new(filters);
         results = filter_engine.apply(results)?;
 
-        // Sort by similarity
         results.sort_by(|a, b| {
             b.similarity.partial_cmp(&a.similarity)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        // Take top N results
         results.truncate(num_results);
 
-        // Update ranks
         for (idx, result) in results.iter_mut().enumerate() {
             result.rank = idx + 1;
         }
@@ -82,4 +74,3 @@ fn cosine_similarity(a: &Array1<f32>, b: &Array1<f32>) -> f32 {
 
     dot_product / (norm_a * norm_b)
 }
-

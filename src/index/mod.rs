@@ -1,7 +1,9 @@
 mod builder;
+mod error;
 mod storage;
 
 pub use builder::IndexBuilder;
+pub use error::IndexError;
 pub use storage::IndexStorage;
 
 use chrono::{DateTime, Utc};

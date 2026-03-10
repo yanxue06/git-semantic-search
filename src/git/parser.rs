@@ -1,24 +1,22 @@
-use anyhow::{Context, Result};
 use git2::Repository;
 use std::path::Path;
 use tracing::debug;
 
 use super::diff::DiffExtractor;
-use super::CommitInfo;
+use super::{CommitInfo, GitError};
 
 pub struct RepositoryParser {
     repo: Repository,
 }
 
 impl RepositoryParser {
-    pub fn new(path: &Path) -> Result<Self> {
-        let repo = Repository::discover(path)
-            .context("Failed to open git repository. Make sure you're in a git repository.")?;
+    pub fn new(path: &Path) -> Result<Self, GitError> {
+        let repo = Repository::discover(path).map_err(GitError::RepositoryNotFound)?;
 
         Ok(Self { repo })
     }
 
-    pub fn parse_commits(&self, include_diffs: bool) -> Result<Vec<CommitInfo>> {
+    pub fn parse_commits(&self, include_diffs: bool) -> Result<Vec<CommitInfo>, GitError> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TIME)?;
@@ -60,7 +58,7 @@ impl RepositoryParser {
         Ok(commits)
     }
 
-    pub fn parse_commits_since(&self, since_hash: &str) -> Result<Vec<CommitInfo>> {
+    pub fn parse_commits_since(&self, since_hash: &str) -> Result<Vec<CommitInfo>, GitError> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TIME)?;
@@ -96,11 +94,9 @@ impl RepositoryParser {
         }
 
         if !found_since {
-            anyhow::bail!("Could not find commit {} in history", since_hash);
+            return Err(GitError::CommitNotFound(since_hash.to_string()));
         }
 
         Ok(commits)
     }
-
 }
-

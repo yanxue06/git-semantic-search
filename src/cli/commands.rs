@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 use tracing::info;
@@ -15,7 +15,7 @@ pub fn init(force: bool) -> Result<()> {
 
     let model_manager = ModelManager::new()?;
 
-    if force || !model_manager.is_model_downloaded()? {
+    if force || !model_manager.is_model_downloaded() {
         println!("📥 Downloading embedding model (bge-small-en-v1.5, ~130MB)...");
         println!("This is a one-time setup and may take a few minutes.\n");
 
@@ -47,14 +47,12 @@ pub fn index(repo_path: &str, include_diffs: bool) -> Result<()> {
     let path = Path::new(repo_path);
     println!("📚 Indexing repository: {}\n", path.display());
 
-    // Parse git repository
     info!("Parsing git repository...");
     let parser = RepositoryParser::new(path)?;
     let commits = parser.parse_commits(include_diffs)?;
 
     println!("Found {} commits to index\n", commits.len());
 
-    // Build index
     info!("Building semantic index...");
     let pb = ProgressBar::new(commits.len() as u64);
     pb.set_style(
@@ -74,9 +72,8 @@ pub fn index(repo_path: &str, include_diffs: bool) -> Result<()> {
 
     pb.finish_with_message("✅ Commits indexed");
 
-    // Save index
     println!("\n💾 Saving index...");
-    let index = builder.build()?;
+    let index = builder.build();
     let storage = IndexStorage::new(path)?;
     storage.save(&index)?;
 
@@ -93,13 +90,9 @@ pub fn update(repo_path: &str) -> Result<()> {
     let path = Path::new(repo_path);
     println!("🔄 Updating index for: {}\n", path.display());
 
-    // Load existing index
     let storage = IndexStorage::new(path)?;
-    let index = storage
-        .load()
-        .context("No index found. Run 'git-semantic index' first.")?;
+    let index = storage.load()?;
 
-    // Parse new commits
     let parser = RepositoryParser::new(path)?;
     let new_commits = parser.parse_commits_since(&index.last_commit)?;
 
@@ -110,7 +103,6 @@ pub fn update(repo_path: &str) -> Result<()> {
 
     println!("Found {} new commits\n", new_commits.len());
 
-    // Update index
     let model_manager = ModelManager::new()?;
     let mut builder = IndexBuilder::from_existing(index, model_manager)?;
 
@@ -129,8 +121,7 @@ pub fn update(repo_path: &str) -> Result<()> {
 
     pb.finish_with_message("✅ New commits indexed");
 
-    // Save updated index
-    let updated_index = builder.build()?;
+    let updated_index = builder.build();
     storage.save(&updated_index)?;
 
     println!("\n✅ Index updated successfully!");
@@ -146,18 +137,13 @@ pub fn search(
 ) -> Result<()> {
     let path = Path::new(repo_path);
 
-    // Load index
     let storage = IndexStorage::new(path)?;
-    let index = storage
-        .load()
-        .context("No index found. Run 'git-semantic index' first.")?;
+    let index = storage.load()?;
 
-    // Perform search
     let model_manager = ModelManager::new()?;
     let mut engine = SearchEngine::new(model_manager)?;
     let results = engine.search(&index, query, num_results, filters)?;
 
-    // Display results
     if results.is_empty() {
         println!("No results found for: \"{}\"", query);
         return Ok(());
@@ -175,7 +161,6 @@ pub fn search(
         );
         println!("   Author: {}, {}", result.commit.author, result.commit.date);
 
-        // Show first few lines of diff summary if available
         if !result.commit.diff_summary.is_empty() {
             let preview: String = result
                 .commit
@@ -199,9 +184,7 @@ pub fn stats(repo_path: &str) -> Result<()> {
     let path = Path::new(repo_path);
 
     let storage = IndexStorage::new(path)?;
-    let index = storage
-        .load()
-        .context("No index found. Run 'git-semantic index' first.")?;
+    let index = storage.load()?;
 
     println!("📊 Index Statistics\n");
     println!("Repository: {}", path.display());
@@ -220,4 +203,3 @@ pub fn stats(repo_path: &str) -> Result<()> {
 
     Ok(())
 }
-

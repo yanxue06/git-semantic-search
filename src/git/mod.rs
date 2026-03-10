@@ -1,6 +1,8 @@
 mod diff;
+mod error;
 mod parser;
 
+pub use error::GitError;
 pub use parser::RepositoryParser;
 
 use chrono::{DateTime, Utc};

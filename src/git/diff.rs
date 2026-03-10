@@ -1,10 +1,11 @@
-use anyhow::Result;
 use git2::{Commit, Diff, DiffOptions, Repository};
+
+use super::GitError;
 
 pub struct DiffExtractor;
 
 impl DiffExtractor {
-    pub fn extract_diff(repo: &Repository, commit: &Commit) -> Result<String> {
+    pub fn extract_diff(repo: &Repository, commit: &Commit) -> Result<String, GitError> {
         let tree = commit.tree()?;
 
         let parent_tree = commit
@@ -13,13 +14,12 @@ impl DiffExtractor {
             .and_then(|parent| parent.tree().ok());
 
         let mut diff_opts = DiffOptions::new();
-        diff_opts.context_lines(0); // We just want changes, not context
+        diff_opts.context_lines(0);
 
         let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))?;
 
         let summary = Self::format_diff(&diff)?;
 
-        // Limit size to avoid huge diffs
         const MAX_DIFF_SIZE: usize = 10_000;
         if summary.len() > MAX_DIFF_SIZE {
             Ok(summary[..MAX_DIFF_SIZE].to_string() + "\n... (truncated)")
@@ -28,7 +28,7 @@ impl DiffExtractor {
         }
     }
 
-    fn format_diff(diff: &Diff) -> Result<String> {
+    fn format_diff(diff: &Diff) -> Result<String, GitError> {
         let mut result = String::new();
 
         diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
@@ -47,4 +47,3 @@ impl DiffExtractor {
         Ok(result)
     }
 }
-

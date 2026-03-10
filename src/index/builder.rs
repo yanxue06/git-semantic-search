@@ -1,11 +1,10 @@
-use anyhow::Result;
 use chrono::Utc;
 use tracing::debug;
 
 use crate::embedding::ModelManager;
 use crate::git::CommitInfo;
 
-use super::{IndexEntry, SemanticIndex};
+use super::{IndexEntry, IndexError, SemanticIndex};
 
 pub struct IndexBuilder {
     entries: Vec<IndexEntry>,
@@ -15,8 +14,7 @@ pub struct IndexBuilder {
 }
 
 impl IndexBuilder {
-    pub fn new(mut model_manager: ModelManager) -> Result<Self> {
-        // Initialize the model before use
+    pub fn new(mut model_manager: ModelManager) -> Result<Self, IndexError> {
         model_manager.init()?;
         let model_version = model_manager.model_version();
 
@@ -28,8 +26,7 @@ impl IndexBuilder {
         })
     }
 
-    pub fn from_existing(index: SemanticIndex, mut model_manager: ModelManager) -> Result<Self> {
-        // Initialize the model before use
+    pub fn from_existing(index: SemanticIndex, mut model_manager: ModelManager) -> Result<Self, IndexError> {
         model_manager.init()?;
         let model_version = model_manager.model_version();
 
@@ -41,8 +38,7 @@ impl IndexBuilder {
         })
     }
 
-    pub fn add_commit(&mut self, commit: CommitInfo) -> Result<()> {
-        // Check if this commit already exists to prevent duplicates
+    pub fn add_commit(&mut self, commit: CommitInfo) -> Result<(), IndexError> {
         if self.entries.iter().any(|e| e.commit.hash == commit.hash) {
             debug!("Commit {} already indexed, skipping", &commit.hash[..7]);
             return Ok(());
@@ -50,25 +46,19 @@ impl IndexBuilder {
 
         debug!("Adding commit: {}", &commit.hash[..7]);
 
-        // Generate text representation
         let text = commit.to_text(true);
-
-        // Generate embedding
         let embedding_array = self.model_manager.encode_text(&text)?;
         let embedding = embedding_array.to_vec();
 
-        // Store the commit hash as last_commit
         self.last_commit = Some(commit.hash.clone());
 
-        // Create index entry
         let entry = IndexEntry { commit, embedding };
-
         self.entries.push(entry);
 
         Ok(())
     }
 
-    pub fn build(self) -> Result<SemanticIndex> {
+    pub fn build(self) -> SemanticIndex {
         let last_commit = self
             .last_commit
             .unwrap_or_else(|| "unknown".to_string());
@@ -78,7 +68,6 @@ impl IndexBuilder {
         index.metadata.total_commits = index.entries.len();
         index.metadata.updated_at = Utc::now();
 
-        Ok(index)
+        index
     }
 }
-

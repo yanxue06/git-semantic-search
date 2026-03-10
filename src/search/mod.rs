@@ -1,7 +1,9 @@
 mod engine;
+mod error;
 mod filter;
 
 pub use engine::SearchEngine;
+pub use error::SearchError;
 
 use crate::git::CommitInfo;
 use serde::{Deserialize, Serialize};
