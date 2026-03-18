@@ -14,4 +14,3 @@ pub struct SearchResult {
     pub similarity: f32,
     pub rank: usize,
 }
-

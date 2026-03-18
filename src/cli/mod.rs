@@ -7,4 +7,3 @@ pub struct SearchFilters {
     pub before: Option<String>,
     pub file: Option<String>,
 }
-

@@ -9,7 +9,10 @@ fn test_version_flag() {
     let output = git_semantic_bin().arg("--version").output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("git-semantic"), "should print version: {stdout}");
+    assert!(
+        stdout.contains("git-semantic"),
+        "should print version: {stdout}"
+    );
 }
 
 #[test]

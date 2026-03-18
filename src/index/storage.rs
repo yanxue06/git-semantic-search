@@ -66,11 +66,8 @@ mod tests {
     }
 
     fn sample_index() -> SemanticIndex {
-        let mut index = SemanticIndex::new(
-            "bge-small-en-v1.5".to_string(),
-            "abc1234".to_string(),
-            true,
-        );
+        let mut index =
+            SemanticIndex::new("bge-small-en-v1.5".to_string(), "abc1234".to_string(), true);
         index.entries.push(IndexEntry {
             commit: CommitInfo {
                 hash: "abc1234".to_string(),
@@ -162,6 +159,9 @@ mod tests {
         storage.save(&index).unwrap();
 
         let index_file = dir.path().join(".git").join("semantic-index");
-        assert!(index_file.exists(), "index should be stored in .git/semantic-index");
+        assert!(
+            index_file.exists(),
+            "index should be stored in .git/semantic-index"
+        );
     }
 }

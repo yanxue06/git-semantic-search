@@ -1,6 +1,6 @@
-use git2::{Repository, Signature};
 use git_semantic::git::CommitInfo;
 use git_semantic::index::{IndexEntry, IndexStorage, SemanticIndex};
+use git2::{Repository, Signature};
 use std::fs;
 use tempfile::TempDir;
 
@@ -90,7 +90,10 @@ fn test_large_index_roundtrip() {
 
     let size = storage.index_size_mb().unwrap();
     // ~3KB per commit as claimed in README -> ~3MB for 1000
-    assert!(size > 0.5, "1000-entry index should be substantial, got {size} MB");
+    assert!(
+        size > 0.5,
+        "1000-entry index should be substantial, got {size} MB"
+    );
 }
 
 #[test]

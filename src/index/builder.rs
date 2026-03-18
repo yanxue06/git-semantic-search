@@ -30,7 +30,10 @@ impl IndexBuilder {
         })
     }
 
-    pub fn from_existing(index: SemanticIndex, mut model_manager: ModelManager) -> Result<Self, IndexError> {
+    pub fn from_existing(
+        index: SemanticIndex,
+        mut model_manager: ModelManager,
+    ) -> Result<Self, IndexError> {
         model_manager.init()?;
         let model_version = model_manager.model_version();
         let include_diffs = index.metadata.include_diffs;
@@ -70,9 +73,7 @@ impl IndexBuilder {
     }
 
     pub fn build(self) -> SemanticIndex {
-        let last_commit = self
-            .last_commit
-            .unwrap_or_else(|| "unknown".to_string());
+        let last_commit = self.last_commit.unwrap_or_else(|| "unknown".to_string());
 
         let mut index = SemanticIndex::new(self.model_version, last_commit, self.include_diffs);
         index.entries = self.entries;

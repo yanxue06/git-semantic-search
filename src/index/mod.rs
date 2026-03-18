@@ -57,11 +57,8 @@ mod tests {
 
     #[test]
     fn test_semantic_index_new() {
-        let index = SemanticIndex::new(
-            "bge-small-en-v1.5".to_string(),
-            "abc1234".to_string(),
-            true,
-        );
+        let index =
+            SemanticIndex::new("bge-small-en-v1.5".to_string(), "abc1234".to_string(), true);
         assert_eq!(index.model_version, "bge-small-en-v1.5");
         assert_eq!(index.last_commit, "abc1234");
         assert!(index.entries.is_empty());
@@ -119,4 +116,3 @@ mod tests {
         assert!(deserialized.metadata.include_diffs);
     }
 }
-
