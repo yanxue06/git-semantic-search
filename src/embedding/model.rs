@@ -189,11 +189,11 @@ impl ModelManager {
 
         let (shape, data) = output_tensor;
         let _batch_size = shape[0] as usize;
-        let seq_len = shape[1] as usize;
+        let _seq_len = shape[1] as usize;
         let hidden_size = shape[2] as usize;
 
-        let cls_start = 0 * seq_len * hidden_size + 0 * hidden_size;
-        let cls_end = cls_start + hidden_size;
+        let cls_start = 0;
+        let cls_end = hidden_size;
         let embedding: Vec<f32> = data[cls_start..cls_end].to_vec();
 
         let embedding_array = Array1::from_vec(embedding);
