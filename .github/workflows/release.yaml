@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   release:
-    uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1
+    uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1.0.1
     with:
       service-name: git-semantic
       dry-run: ${{ inputs.dry-run || false }}
