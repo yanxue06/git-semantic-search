@@ -1,11 +1,11 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 use tracing::info;
 
 use crate::embedding::ModelManager;
-use crate::git::RepositoryParser;
-use crate::index::{IndexBuilder, IndexStorage};
+use crate::git::{GitError, RepositoryParser};
+use crate::index::{IndexBuilder, IndexError, IndexStorage, SemanticIndex};
 use crate::search::SearchEngine;
 
 use super::SearchFilters;
@@ -43,9 +43,57 @@ pub fn init(force: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn index(repo_path: &str, include_diffs: bool) -> Result<()> {
+pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
     let path = Path::new(repo_path);
-    println!("📚 Indexing repository: {}\n", path.display());
+    let storage = IndexStorage::new(path)?;
+
+    let existing_index = if force {
+        None
+    } else {
+        match storage.load() {
+            Ok(idx) => Some(idx),
+            Err(IndexError::IndexNotFound) => None,
+            Err(e) => return Err(e).context("Failed to load existing index"),
+        }
+    };
+
+    match existing_index {
+        Some(existing) => {
+            let existing_mode = existing.metadata.include_diffs;
+
+            if existing_mode != include_diffs {
+                if !include_diffs && existing_mode {
+                    // Full index already exists, quick is a subset — just do incremental with full mode
+                    println!(
+                        "ℹ️  Index was built in full mode (with diffs), which is a superset of quick mode.\n\
+                         Keeping full mode and checking for new commits.\n"
+                    );
+                    incremental_index(path, &storage, existing, existing_mode)?;
+                } else {
+                    // Quick index exists, full requested — requires re-embedding everything
+                    println!(
+                        "⚠️  Index was built in quick mode (messages only). Switching to full mode \
+                         (with diffs) requires re-embedding all {} commits.\n\
+                         Run with --force to rebuild the index.",
+                        existing.entries.len()
+                    );
+                }
+                return Ok(());
+            }
+
+            incremental_index(path, &storage, existing, include_diffs)?;
+        }
+        None => {
+            full_index(path, &storage, include_diffs)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn full_index(path: &Path, storage: &IndexStorage, include_diffs: bool) -> Result<()> {
+    let mode = if include_diffs { "full" } else { "quick" };
+    println!("📚 Indexing repository ({} mode): {}\n", mode, path.display());
 
     info!("Parsing git repository...");
     let parser = RepositoryParser::new(path)?;
@@ -53,17 +101,15 @@ pub fn index(repo_path: &str, include_diffs: bool) -> Result<()> {
 
     println!("Found {} commits to index\n", commits.len());
 
-    info!("Building semantic index...");
-    let pb = ProgressBar::new(commits.len() as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("=>-"),
-    );
-
     let model_manager = ModelManager::new()?;
-    let mut builder = IndexBuilder::new(model_manager)?;
+    let mut builder = IndexBuilder::new(model_manager, include_diffs)?;
+
+    // Commits are in newest-first order from revwalk; track HEAD as last_commit
+    if let Some(first) = commits.first() {
+        builder.set_last_commit(first.hash.clone());
+    }
+
+    let pb = make_progress_bar(commits.len() as u64);
 
     for commit in commits {
         builder.add_commit(commit)?;
@@ -74,45 +120,58 @@ pub fn index(repo_path: &str, include_diffs: bool) -> Result<()> {
 
     println!("\n💾 Saving index...");
     let index = builder.build();
-    let storage = IndexStorage::new(path)?;
     storage.save(&index)?;
 
-    println!("✅ Index saved successfully!");
-    println!("\n📊 Index statistics:");
-    println!("  - Total commits: {}", index.entries.len());
-    println!("  - Model: {}", index.model_version);
-    println!("  - Index size: ~{:.2} MB", storage.index_size_mb()?);
+    print_index_stats(&index, storage)?;
 
     Ok(())
 }
 
-pub fn update(repo_path: &str) -> Result<()> {
-    let path = Path::new(repo_path);
-    println!("🔄 Updating index for: {}\n", path.display());
-
-    let storage = IndexStorage::new(path)?;
-    let index = storage.load()?;
-
+fn incremental_index(
+    path: &Path,
+    storage: &IndexStorage,
+    existing: SemanticIndex,
+    include_diffs: bool,
+) -> Result<()> {
     let parser = RepositoryParser::new(path)?;
-    let new_commits = parser.parse_commits_since(&index.last_commit)?;
+
+    let new_commits = match parser.parse_commits_since(&existing.last_commit, include_diffs) {
+        Ok(commits) => commits,
+        Err(GitError::CommitNotFound(_)) => {
+            println!(
+                "⚠️  Previously indexed commit {} not found in history (was the branch rebased?).",
+                &existing.last_commit[..7.min(existing.last_commit.len())]
+            );
+            println!("Re-indexing from scratch...\n");
+            return full_index(path, storage, include_diffs);
+        }
+        Err(err) => {
+            return Err(err.into());
+        }
+    };
 
     if new_commits.is_empty() {
-        println!("✅ Index is already up to date!");
+        println!("✅ Index is already up to date! ({} commits indexed)", existing.entries.len());
         return Ok(());
     }
 
-    println!("Found {} new commits\n", new_commits.len());
+    let mode = if include_diffs { "full" } else { "quick" };
+    println!(
+        "📚 Updating index ({} mode): {} ({} new commits)\n",
+        mode,
+        path.display(),
+        new_commits.len()
+    );
 
     let model_manager = ModelManager::new()?;
-    let mut builder = IndexBuilder::from_existing(index, model_manager)?;
+    let mut builder = IndexBuilder::from_existing(existing, model_manager)?;
 
-    let pb = ProgressBar::new(new_commits.len() as u64);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
-            .unwrap()
-            .progress_chars("=>-"),
-    );
+    // New commits are newest-first; update last_commit to the newest
+    if let Some(first) = new_commits.first() {
+        builder.set_last_commit(first.hash.clone());
+    }
+
+    let pb = make_progress_bar(new_commits.len() as u64);
 
     for commit in new_commits {
         builder.add_commit(commit)?;
@@ -121,12 +180,21 @@ pub fn update(repo_path: &str) -> Result<()> {
 
     pb.finish_with_message("✅ New commits indexed");
 
-    let updated_index = builder.build();
-    storage.save(&updated_index)?;
+    println!("\n💾 Saving index...");
+    let index = builder.build();
+    storage.save(&index)?;
 
-    println!("\n✅ Index updated successfully!");
+    print_index_stats(&index, storage)?;
 
     Ok(())
+}
+
+pub fn update(repo_path: &str) -> Result<()> {
+    println!(
+        "Note: `git-semantic index` now automatically handles incremental updates.\n\
+         The `update` command will be removed in a future release.\n"
+    );
+    index(repo_path, true, false)
 }
 
 pub fn search(
@@ -191,6 +259,7 @@ pub fn stats(repo_path: &str) -> Result<()> {
     println!("Total commits indexed: {}", index.entries.len());
     println!("Model version: {}", index.model_version);
     println!("Last indexed commit: {}", index.last_commit);
+    println!("Index mode: {}", if index.metadata.include_diffs { "full (with diffs)" } else { "quick (messages only)" });
     println!("Index size: ~{:.2} MB", storage.index_size_mb()?);
     println!(
         "Created: {}",
@@ -201,5 +270,26 @@ pub fn stats(repo_path: &str) -> Result<()> {
         index.metadata.updated_at.format("%Y-%m-%d %H:%M:%S")
     );
 
+    Ok(())
+}
+
+fn make_progress_bar(total: u64) -> ProgressBar {
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+    pb
+}
+
+fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()> {
+    println!("✅ Index saved successfully!");
+    println!("\n📊 Index statistics:");
+    println!("  - Total commits: {}", index.entries.len());
+    println!("  - Mode: {}", if index.metadata.include_diffs { "full (with diffs)" } else { "quick (messages only)" });
+    println!("  - Model: {}", index.model_version);
+    println!("  - Index size: ~{:.2} MB", storage.index_size_mb()?);
     Ok(())
 }

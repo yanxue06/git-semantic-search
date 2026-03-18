@@ -58,7 +58,11 @@ impl RepositoryParser {
         Ok(commits)
     }
 
-    pub fn parse_commits_since(&self, since_hash: &str) -> Result<Vec<CommitInfo>, GitError> {
+    pub fn parse_commits_since(
+        &self,
+        since_hash: &str,
+        include_diffs: bool,
+    ) -> Result<Vec<CommitInfo>, GitError> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(git2::Sort::TIME)?;
@@ -82,7 +86,12 @@ impl RepositoryParser {
             let date = chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
                 .unwrap_or_default();
             let message = commit.message().unwrap_or("").to_string();
-            let diff_summary = DiffExtractor::extract_diff(&self.repo, &commit)?;
+
+            let diff_summary = if include_diffs {
+                DiffExtractor::extract_diff(&self.repo, &commit)?
+            } else {
+                String::new()
+            };
 
             commits.push(CommitInfo {
                 hash,
