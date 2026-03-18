@@ -93,7 +93,11 @@ pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
 
 fn full_index(path: &Path, storage: &IndexStorage, include_diffs: bool) -> Result<()> {
     let mode = if include_diffs { "full" } else { "quick" };
-    println!("📚 Indexing repository ({} mode): {}\n", mode, path.display());
+    println!(
+        "📚 Indexing repository ({} mode): {}\n",
+        mode,
+        path.display()
+    );
 
     info!("Parsing git repository...");
     let parser = RepositoryParser::new(path)?;
@@ -151,7 +155,10 @@ fn incremental_index(
     };
 
     if new_commits.is_empty() {
-        println!("✅ Index is already up to date! ({} commits indexed)", existing.entries.len());
+        println!(
+            "✅ Index is already up to date! ({} commits indexed)",
+            existing.entries.len()
+        );
         return Ok(());
     }
 
@@ -227,7 +234,10 @@ pub fn search(
             result.commit.message.lines().next().unwrap_or(""),
             result.similarity
         );
-        println!("   Author: {}, {}", result.commit.author, result.commit.date);
+        println!(
+            "   Author: {}, {}",
+            result.commit.author, result.commit.date
+        );
 
         if !result.commit.diff_summary.is_empty() {
             let preview: String = result
@@ -259,7 +269,14 @@ pub fn stats(repo_path: &str) -> Result<()> {
     println!("Total commits indexed: {}", index.entries.len());
     println!("Model version: {}", index.model_version);
     println!("Last indexed commit: {}", index.last_commit);
-    println!("Index mode: {}", if index.metadata.include_diffs { "full (with diffs)" } else { "quick (messages only)" });
+    println!(
+        "Index mode: {}",
+        if index.metadata.include_diffs {
+            "full (with diffs)"
+        } else {
+            "quick (messages only)"
+        }
+    );
     println!("Index size: ~{:.2} MB", storage.index_size_mb()?);
     println!(
         "Created: {}",
@@ -288,7 +305,14 @@ fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()
     println!("✅ Index saved successfully!");
     println!("\n📊 Index statistics:");
     println!("  - Total commits: {}", index.entries.len());
-    println!("  - Mode: {}", if index.metadata.include_diffs { "full (with diffs)" } else { "quick (messages only)" });
+    println!(
+        "  - Mode: {}",
+        if index.metadata.include_diffs {
+            "full (with diffs)"
+        } else {
+            "quick (messages only)"
+        }
+    );
     println!("  - Model: {}", index.model_version);
     println!("  - Index size: ~{:.2} MB", storage.index_size_mb()?);
     Ok(())

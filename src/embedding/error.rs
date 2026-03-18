@@ -37,36 +37,28 @@ impl EmbeddingError {
     /// Returns a user-facing hint for how to resolve this error.
     pub fn hint(&self) -> Option<&'static str> {
         match self {
-            Self::ProjectDirsNotFound => Some(
-                "Ensure your system supports standard data directories (e.g. $HOME is set)."
-            ),
-            Self::ModelNotDownloaded => Some(
-                "Run: git-semantic init"
-            ),
+            Self::ProjectDirsNotFound => {
+                Some("Ensure your system supports standard data directories (e.g. $HOME is set).")
+            }
+            Self::ModelNotDownloaded => Some("Run: git-semantic init"),
             Self::ModelNotInitialized => Some(
-                "This is an internal error. Please report it at https://github.com/yanxue06/git-semantic-search/issues"
+                "This is an internal error. Please report it at https://github.com/yanxue06/git-semantic-search/issues",
             ),
-            Self::Tokenization(_) => Some(
-                "The input text may contain unsupported characters. Try a simpler query."
-            ),
+            Self::Tokenization(_) => {
+                Some("The input text may contain unsupported characters. Try a simpler query.")
+            }
             Self::DownloadFailed { .. } => Some(
-                "Check your internet connection and try again. If behind a proxy, ensure HTTPS_PROXY is set."
+                "Check your internet connection and try again. If behind a proxy, ensure HTTPS_PROXY is set.",
             ),
-            Self::MissingContentLength(_) => Some(
-                "The model server returned an unexpected response. Try again later."
-            ),
-            Self::Http(_) => Some(
-                "Check your internet connection and firewall settings."
-            ),
-            Self::Ort(_) => Some(
-                "The ONNX model may be corrupted. Try: git-semantic init --force"
-            ),
-            Self::Io(_) => Some(
-                "Check file permissions and available disk space."
-            ),
-            Self::Shape(_) => Some(
-                "The model produced unexpected output. Try: git-semantic init --force"
-            ),
+            Self::MissingContentLength(_) => {
+                Some("The model server returned an unexpected response. Try again later.")
+            }
+            Self::Http(_) => Some("Check your internet connection and firewall settings."),
+            Self::Ort(_) => Some("The ONNX model may be corrupted. Try: git-semantic init --force"),
+            Self::Io(_) => Some("Check file permissions and available disk space."),
+            Self::Shape(_) => {
+                Some("The model produced unexpected output. Try: git-semantic init --force")
+            }
         }
     }
 
@@ -134,4 +126,3 @@ fn regex_lite_replace_user_paths(msg: &str) -> String {
     }
     msg.to_string()
 }
-

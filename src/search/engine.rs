@@ -49,7 +49,8 @@ impl SearchEngine {
         results = filter_engine.apply(results)?;
 
         results.sort_by(|a, b| {
-            b.similarity.partial_cmp(&a.similarity)
+            b.similarity
+                .partial_cmp(&a.similarity)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
@@ -84,7 +85,10 @@ mod tests {
         let a = Array1::from_vec(vec![1.0, 2.0, 3.0]);
         let b = Array1::from_vec(vec![1.0, 2.0, 3.0]);
         let sim = cosine_similarity(&a, &b);
-        assert!((sim - 1.0).abs() < 1e-6, "identical vectors should have similarity ~1.0, got {sim}");
+        assert!(
+            (sim - 1.0).abs() < 1e-6,
+            "identical vectors should have similarity ~1.0, got {sim}"
+        );
     }
 
     #[test]
@@ -92,7 +96,10 @@ mod tests {
         let a = Array1::from_vec(vec![1.0, 0.0, 0.0]);
         let b = Array1::from_vec(vec![0.0, 1.0, 0.0]);
         let sim = cosine_similarity(&a, &b);
-        assert!(sim.abs() < 1e-6, "orthogonal vectors should have similarity ~0.0, got {sim}");
+        assert!(
+            sim.abs() < 1e-6,
+            "orthogonal vectors should have similarity ~0.0, got {sim}"
+        );
     }
 
     #[test]
@@ -100,7 +107,10 @@ mod tests {
         let a = Array1::from_vec(vec![1.0, 2.0, 3.0]);
         let b = Array1::from_vec(vec![-1.0, -2.0, -3.0]);
         let sim = cosine_similarity(&a, &b);
-        assert!((sim - (-1.0)).abs() < 1e-6, "opposite vectors should have similarity ~-1.0, got {sim}");
+        assert!(
+            (sim - (-1.0)).abs() < 1e-6,
+            "opposite vectors should have similarity ~-1.0, got {sim}"
+        );
     }
 
     #[test]
@@ -118,7 +128,10 @@ mod tests {
         let val = std::f32::consts::FRAC_1_SQRT_2;
         let b = Array1::from_vec(vec![val, val]); // 45 degrees
         let sim = cosine_similarity(&a, &b);
-        assert!((sim - val).abs() < 0.01, "45-degree angle should give ~0.707, got {sim}");
+        assert!(
+            (sim - val).abs() < 0.01,
+            "45-degree angle should give ~0.707, got {sim}"
+        );
     }
 
     #[test]
@@ -127,6 +140,9 @@ mod tests {
         let a = Array1::from_vec((0..384).map(|i| (i as f32) / 384.0).collect());
         let b = Array1::from_vec((0..384).map(|i| ((383 - i) as f32) / 384.0).collect());
         let sim = cosine_similarity(&a, &b);
-        assert!(sim > 0.0 && sim < 1.0, "should be between 0 and 1, got {sim}");
+        assert!(
+            sim > 0.0 && sim < 1.0,
+            "should be between 0 and 1, got {sim}"
+        );
     }
 }

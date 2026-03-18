@@ -22,18 +22,18 @@ impl GitError {
     /// Returns a user-facing hint for how to resolve this error.
     pub fn hint(&self) -> Option<&'static str> {
         match self {
-            Self::RepositoryNotFound(_) => Some(
-                "Make sure you're inside a git repository, or use --path to specify one."
-            ),
+            Self::RepositoryNotFound(_) => {
+                Some("Make sure you're inside a git repository, or use --path to specify one.")
+            }
             Self::CommitNotFound(_) => Some(
-                "The index references commits that no longer exist. Run: git-semantic index --force"
+                "The index references commits that no longer exist. Run: git-semantic index --force",
             ),
-            Self::NoHead => Some(
-                "The repository has no commits yet. Make at least one commit before indexing."
-            ),
-            Self::RevwalkFailed(_) => Some(
-                "The git history may be corrupted. Try running: git fsck"
-            ),
+            Self::NoHead => {
+                Some("The repository has no commits yet. Make at least one commit before indexing.")
+            }
+            Self::RevwalkFailed(_) => {
+                Some("The git history may be corrupted. Try running: git fsck")
+            }
             Self::Git(_) => None,
         }
     }

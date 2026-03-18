@@ -20,12 +20,10 @@ impl SearchError {
     /// Returns a user-facing hint for how to resolve this error.
     pub fn hint(&self) -> Option<&'static str> {
         match self {
-            Self::InvalidDateFormat { .. } => Some(
-                "Use the format YYYY-MM-DD, e.g. --after 2024-01-15"
-            ),
-            Self::IndexNotLoaded => Some(
-                "Run: git-semantic index"
-            ),
+            Self::InvalidDateFormat { .. } => {
+                Some("Use the format YYYY-MM-DD, e.g. --after 2024-01-15")
+            }
+            Self::IndexNotLoaded => Some("Run: git-semantic index"),
             Self::Embedding(_) => None, // Delegate to EmbeddingError's own hint
         }
     }

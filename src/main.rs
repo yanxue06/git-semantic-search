@@ -100,7 +100,12 @@ fn main() {
             tracing::info!("Initializing git-semantic...");
             cli::commands::init(force)
         }
-        Commands::Index { quick, full, force, path } => {
+        Commands::Index {
+            quick,
+            full,
+            force,
+            path,
+        } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
             let include_diffs = full || !quick;
             cli::commands::index(&repo_path, include_diffs, force)

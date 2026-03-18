@@ -17,25 +17,32 @@ impl FilterEngine {
         let mut filtered = results;
 
         if let Some(ref author) = self.filters.author {
-            filtered.retain(|r| r.commit.author.to_lowercase().contains(&author.to_lowercase()));
+            filtered.retain(|r| {
+                r.commit
+                    .author
+                    .to_lowercase()
+                    .contains(&author.to_lowercase())
+            });
         }
 
         if let Some(ref after) = self.filters.after {
-            let after_date = NaiveDate::parse_from_str(after, "%Y-%m-%d")
-                .map_err(|e| SearchError::InvalidDateFormat {
+            let after_date = NaiveDate::parse_from_str(after, "%Y-%m-%d").map_err(|e| {
+                SearchError::InvalidDateFormat {
                     value: after.clone(),
                     source: e,
-                })?;
+                }
+            })?;
             let after_datetime = after_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
             filtered.retain(|r| r.commit.date >= after_datetime);
         }
 
         if let Some(ref before) = self.filters.before {
-            let before_date = NaiveDate::parse_from_str(before, "%Y-%m-%d")
-                .map_err(|e| SearchError::InvalidDateFormat {
+            let before_date = NaiveDate::parse_from_str(before, "%Y-%m-%d").map_err(|e| {
+                SearchError::InvalidDateFormat {
                     value: before.clone(),
                     source: e,
-                })?;
+                }
+            })?;
             let before_datetime = before_date.and_hms_opt(23, 59, 59).unwrap().and_utc();
             filtered.retain(|r| r.commit.date <= before_datetime);
         }
@@ -70,7 +77,12 @@ mod tests {
     }
 
     fn no_filters() -> SearchFilters {
-        SearchFilters { author: None, after: None, before: None, file: None }
+        SearchFilters {
+            author: None,
+            after: None,
+            before: None,
+            file: None,
+        }
     }
 
     #[test]
@@ -191,7 +203,10 @@ mod tests {
         let filtered = engine.apply(results).unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].commit.author, "Alice");
-        assert_eq!(filtered[0].commit.date.format("%Y-%m-%d").to_string(), "2024-06-01");
+        assert_eq!(
+            filtered[0].commit.date.format("%Y-%m-%d").to_string(),
+            "2024-06-01"
+        );
     }
 
     #[test]

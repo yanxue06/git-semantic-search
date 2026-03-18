@@ -29,8 +29,8 @@ impl RepositoryParser {
 
             let hash = oid.to_string();
             let author = commit.author().name().unwrap_or("Unknown").to_string();
-            let date = chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
-                .unwrap_or_default();
+            let date =
+                chrono::DateTime::from_timestamp(commit.time().seconds(), 0).unwrap_or_default();
             let message = commit.message().unwrap_or("").to_string();
 
             let diff_summary = if include_diffs {
@@ -39,12 +39,7 @@ impl RepositoryParser {
                 String::new()
             };
 
-            debug!(
-                "Parsed commit: {} by {} at {}",
-                &hash[..7],
-                author,
-                date
-            );
+            debug!("Parsed commit: {} by {} at {}", &hash[..7], author, date);
 
             commits.push(CommitInfo {
                 hash,
@@ -83,8 +78,8 @@ impl RepositoryParser {
 
             let hash = oid.to_string();
             let author = commit.author().name().unwrap_or("Unknown").to_string();
-            let date = chrono::DateTime::from_timestamp(commit.time().seconds(), 0)
-                .unwrap_or_default();
+            let date =
+                chrono::DateTime::from_timestamp(commit.time().seconds(), 0).unwrap_or_default();
             let message = commit.message().unwrap_or("").to_string();
 
             let diff_summary = if include_diffs {

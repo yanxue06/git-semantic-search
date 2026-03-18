@@ -81,4 +81,3 @@ mod tests {
         assert!(text.ends_with(&commit.author));
     }
 }
-
