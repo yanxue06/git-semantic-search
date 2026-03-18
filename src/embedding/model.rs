@@ -1,12 +1,12 @@
 use directories::ProjectDirs;
 use indicatif::{ProgressBar, ProgressStyle};
 use ndarray::Array1;
-use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
+use ort::session::builder::GraphOptimizationLevel;
 use std::fs;
 use std::path::PathBuf;
 use tokenizers::Tokenizer;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 use super::{Embedding, EmbeddingConfig, EmbeddingError};
 
@@ -138,9 +138,13 @@ impl ModelManager {
     pub fn encode_text(&mut self, text: &str) -> Result<Embedding, EmbeddingError> {
         debug!("Encoding text: {}", &text[..text.len().min(50)]);
 
-        let session = self.session.as_mut()
+        let session = self
+            .session
+            .as_mut()
             .ok_or(EmbeddingError::ModelNotInitialized)?;
-        let tokenizer = self.tokenizer.as_ref()
+        let tokenizer = self
+            .tokenizer
+            .as_ref()
             .ok_or(EmbeddingError::ModelNotInitialized)?;
 
         let encoding = tokenizer
@@ -160,22 +164,24 @@ impl ModelManager {
 
         use ort::value::Value;
 
-        let input_ids_array_2d = ndarray::Array2::from_shape_vec(
-            (1, max_len),
-            input_ids_array,
-        )?;
-        let attention_mask_array_2d = ndarray::Array2::from_shape_vec(
-            (1, max_len),
-            attention_mask_array,
-        )?;
-        let token_type_ids_array_2d = ndarray::Array2::from_shape_vec(
-            (1, max_len),
-            token_type_ids_array,
-        )?;
+        let input_ids_array_2d = ndarray::Array2::from_shape_vec((1, max_len), input_ids_array)?;
+        let attention_mask_array_2d =
+            ndarray::Array2::from_shape_vec((1, max_len), attention_mask_array)?;
+        let token_type_ids_array_2d =
+            ndarray::Array2::from_shape_vec((1, max_len), token_type_ids_array)?;
 
-        let input_ids_tensor = Value::from_array((input_ids_array_2d.shape(), input_ids_array_2d.as_slice().unwrap().to_vec()))?;
-        let attention_mask_tensor = Value::from_array((attention_mask_array_2d.shape(), attention_mask_array_2d.as_slice().unwrap().to_vec()))?;
-        let token_type_ids_tensor = Value::from_array((token_type_ids_array_2d.shape(), token_type_ids_array_2d.as_slice().unwrap().to_vec()))?;
+        let input_ids_tensor = Value::from_array((
+            input_ids_array_2d.shape(),
+            input_ids_array_2d.as_slice().unwrap().to_vec(),
+        ))?;
+        let attention_mask_tensor = Value::from_array((
+            attention_mask_array_2d.shape(),
+            attention_mask_array_2d.as_slice().unwrap().to_vec(),
+        ))?;
+        let token_type_ids_tensor = Value::from_array((
+            token_type_ids_array_2d.shape(),
+            token_type_ids_array_2d.as_slice().unwrap().to_vec(),
+        ))?;
 
         let inputs = ort::inputs![
             "input_ids" => input_ids_tensor,
@@ -184,16 +190,15 @@ impl ModelManager {
         ];
         let outputs = session.run(inputs)?;
 
-        let output_tensor = outputs["last_hidden_state"]
-            .try_extract_tensor::<f32>()?;
+        let output_tensor = outputs["last_hidden_state"].try_extract_tensor::<f32>()?;
 
         let (shape, data) = output_tensor;
         let _batch_size = shape[0] as usize;
-        let seq_len = shape[1] as usize;
+        let _seq_len = shape[1] as usize;
         let hidden_size = shape[2] as usize;
 
-        let cls_start = 0 * seq_len * hidden_size + 0 * hidden_size;
-        let cls_end = cls_start + hidden_size;
+        let cls_start = 0;
+        let cls_end = hidden_size;
         let embedding: Vec<f32> = data[cls_start..cls_end].to_vec();
 
         let embedding_array = Array1::from_vec(embedding);

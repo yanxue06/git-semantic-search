@@ -12,6 +12,10 @@ readme = "README.md"
 keywords = ["git", "search", "semantic", "cli", "embeddings"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "git_semantic"
+path = "src/lib.rs"
+
 [[bin]]
 name = "git-semantic"
 path = "src/main.rs"

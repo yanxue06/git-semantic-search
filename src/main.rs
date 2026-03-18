@@ -1,12 +1,6 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
-use tracing::info;
-
-mod cli;
-mod embedding;
-mod git;
-mod index;
-mod search;
+use git_semantic::{cli, embedding, git, index, search};
+use std::process;
 
 #[derive(Parser)]
 #[command(name = "git-semantic")]
@@ -90,8 +84,8 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
-    // Initialize tracing
+fn main() {
+    // Initialize tracing — only show logs when RUST_LOG is explicitly set
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -101,19 +95,24 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    match cli.command {
+    let result = match cli.command {
         Commands::Init { force } => {
-            info!("Initializing git-semantic...");
-            cli::commands::init(force)?;
+            tracing::info!("Initializing git-semantic...");
+            cli::commands::init(force)
         }
-        Commands::Index { quick, full, force, path } => {
+        Commands::Index {
+            quick,
+            full,
+            force,
+            path,
+        } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
             let include_diffs = full || !quick;
-            cli::commands::index(&repo_path, include_diffs, force)?;
+            cli::commands::index(&repo_path, include_diffs, force)
         }
         Commands::Update { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
-            cli::commands::update(&repo_path)?;
+            cli::commands::update(&repo_path)
         }
         Commands::Search {
             query,
@@ -131,14 +130,75 @@ fn main() -> Result<()> {
                 before,
                 file,
             };
-            cli::commands::search(&repo_path, &query, results, filters)?;
+            cli::commands::search(&repo_path, &query, results, filters)
         }
         Commands::Stats { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
-            cli::commands::stats(&repo_path)?;
+            cli::commands::stats(&repo_path)
         }
-    }
+    };
 
-    Ok(())
+    if let Err(err) = result {
+        print_error(&err);
+        process::exit(1);
+    }
 }
 
+/// Format and print errors in a user-friendly way, with hints when available.
+/// Walks the full error chain to surface root causes without exposing internals.
+fn print_error(err: &anyhow::Error) {
+    eprintln!("\n  error: {err}");
+
+    // Walk the error chain for context
+    let mut source = err.source();
+    while let Some(cause) = source {
+        eprintln!("  caused by: {cause}");
+        source = std::error::Error::source(cause);
+    }
+
+    // Try to extract a hint from known error types
+    if let Some(hint) = extract_hint(err) {
+        eprintln!("\n  hint: {hint}");
+    }
+
+    // Extract error code if available
+    if let Some(code) = extract_code(err) {
+        eprintln!("  code: {code}");
+    }
+
+    eprintln!();
+}
+
+/// Extract a hint from any of our domain error types.
+fn extract_hint(err: &anyhow::Error) -> Option<&'static str> {
+    if let Some(e) = err.downcast_ref::<embedding::EmbeddingError>() {
+        return e.hint();
+    }
+    if let Some(e) = err.downcast_ref::<git::GitError>() {
+        return e.hint();
+    }
+    if let Some(e) = err.downcast_ref::<index::IndexError>() {
+        return e.hint();
+    }
+    if let Some(e) = err.downcast_ref::<search::SearchError>() {
+        return e.hint();
+    }
+    None
+}
+
+/// Extract an error code from any of our domain error types.
+fn extract_code(err: &anyhow::Error) -> Option<&'static str> {
+    if let Some(e) = err.downcast_ref::<embedding::EmbeddingError>() {
+        return Some(e.code());
+    }
+    if let Some(e) = err.downcast_ref::<git::GitError>() {
+        return Some(e.code());
+    }
+    if let Some(e) = err.downcast_ref::<index::IndexError>() {
+        return Some(e.code());
+    }
+    if let Some(e) = err.downcast_ref::<search::SearchError>() {
+        return Some(e.code());
+    }
+    None
+}

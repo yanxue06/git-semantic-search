@@ -8,15 +8,13 @@ impl DiffExtractor {
     pub fn extract_diff(repo: &Repository, commit: &Commit) -> Result<String, GitError> {
         let tree = commit.tree()?;
 
-        let parent_tree = commit
-            .parent(0)
-            .ok()
-            .and_then(|parent| parent.tree().ok());
+        let parent_tree = commit.parent(0).ok().and_then(|parent| parent.tree().ok());
 
         let mut diff_opts = DiffOptions::new();
         diff_opts.context_lines(0);
 
-        let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))?;
+        let diff =
+            repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))?;
 
         let summary = Self::format_diff(&diff)?;
 

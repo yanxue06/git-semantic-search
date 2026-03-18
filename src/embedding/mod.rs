@@ -26,3 +26,21 @@ impl Default for EmbeddingConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_embedding_config_defaults() {
+        let config = EmbeddingConfig::default();
+        assert_eq!(config.model_name, "bge-small-en-v1.5");
+        assert_eq!(config.dimension, 384);
+        assert_eq!(config.max_length, 512);
+    }
+
+    #[test]
+    fn test_embedding_type_is_384_dimensional() {
+        let embedding: Embedding = Array1::zeros(384);
+        assert_eq!(embedding.len(), 384);
+    }
+}
