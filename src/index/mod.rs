@@ -34,7 +34,7 @@ pub struct SemanticIndex {
 }
 
 impl SemanticIndex {
-    pub fn new(model_version: String, last_commit: String) -> Self {
+    pub fn new(model_version: String, last_commit: String, include_diffs: bool) -> Self {
         let now = Utc::now();
         Self {
             entries: Vec::new(),
@@ -44,7 +44,7 @@ impl SemanticIndex {
                 created_at: now,
                 updated_at: now,
                 total_commits: 0,
-                include_diffs: true,
+                include_diffs,
             },
         }
     }

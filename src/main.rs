@@ -36,6 +36,10 @@ enum Commands {
         #[arg(long)]
         full: bool,
 
+        /// Force full re-index from scratch (required to change between quick/full modes)
+        #[arg(long)]
+        force: bool,
+
         /// Repository path (defaults to current directory)
         #[arg(short, long)]
         path: Option<String>,
@@ -102,10 +106,10 @@ fn main() -> Result<()> {
             info!("Initializing git-semantic...");
             cli::commands::init(force)?;
         }
-        Commands::Index { quick, full, path } => {
+        Commands::Index { quick, full, force, path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
             let include_diffs = full || !quick;
-            cli::commands::index(&repo_path, include_diffs)?;
+            cli::commands::index(&repo_path, include_diffs, force)?;
         }
         Commands::Update { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
