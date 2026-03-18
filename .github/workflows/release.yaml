@@ -1,144 +1,31 @@
 name: Release
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
-  push:
-    branches:
-      - main
+    inputs:
+      release:
+        description: "Force release (skip label check)"
+        type: boolean
+        default: false
+      dry-run:
+        description: "Dry run (no publish)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
+  pull-requests: read
 
 jobs:
-  check:
-    name: Check if release is needed
-    runs-on: ubuntu-latest
-    outputs:
-      new-release-published: ${{ steps.check.outputs.new-release-published }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-
-      - name: Install semantic-release and plugins
-        run: |
-          npm install \
-            semantic-release \
-            @semantic-release/changelog \
-            @semantic-release/exec \
-            @semantic-release/git
-
-      - name: Check if release needed
-        id: check
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npx semantic-release --dry-run 2>&1 | tee release-check.log
-          
-          if grep -qE "(The next release version is|There is no previous release)" release-check.log; then
-            VERSION=$(grep -oP "version is \K[0-9]+\.[0-9]+\.[0-9]+" release-check.log | head -1)
-            echo "✅ Release will be published: v$VERSION"
-            echo "new-release-published=true" >> $GITHUB_OUTPUT
-            echo "new-release-version=$VERSION" >> $GITHUB_OUTPUT
-          elif grep -q "There are no relevant changes" release-check.log; then
-            echo "⏭️ No relevant changes (use conventional commits: feat:, fix:, etc.)"
-            echo "new-release-published=false" >> $GITHUB_OUTPUT
-          else
-            echo "❌ Unexpected output, assuming no release"
-            cat release-check.log
-            echo "new-release-published=false" >> $GITHUB_OUTPUT
-          fi
-
-  build:
-    name: Build ${{ matrix.platform }}
-    needs: check
-    if: needs.check.outputs.new-release-published == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-            target: x86_64-unknown-linux-gnu
-            binary_name: git-semantic
-            asset_name: git-semantic-linux-x86_64
-          - os: macos-13
-            platform: macos
-            target: x86_64-apple-darwin
-            binary_name: git-semantic
-            asset_name: git-semantic-macos-x86_64
-          - os: macos-latest
-            platform: macos-arm
-            target: aarch64-apple-darwin
-            binary_name: git-semantic
-            asset_name: git-semantic-macos-arm64
-          - os: windows-latest
-            platform: windows
-            target: x86_64-pc-windows-msvc
-            binary_name: git-semantic.exe
-            asset_name: git-semantic-windows-x86_64.exe
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.asset_name }}
-          path: target/release/${{ matrix.binary_name }}
-
   release:
-    name: Release
-    needs: [check, build]
-    if: needs.check.outputs.new-release-published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v7
-        with:
-          path: ./artifacts
-
-      - name: Prepare binaries for release
-        run: |
-          mkdir -p binaries
-          cp artifacts/git-semantic-linux-x86_64/git-semantic binaries/git-semantic-linux-x86_64
-          cp artifacts/git-semantic-macos-x86_64/git-semantic binaries/git-semantic-macos-x86_64
-          cp artifacts/git-semantic-macos-arm64/git-semantic binaries/git-semantic-macos-arm64
-          cp artifacts/git-semantic-windows-x86_64.exe/git-semantic.exe binaries/git-semantic-windows-x86_64.exe
-          ls -lah binaries/
-
-      - name: Install semantic-release and plugins
-        run: |
-          npm install \
-            semantic-release \
-            @semantic-release/exec \
-            @semantic-release/git
-
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+    uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1
+    with:
+      service-name: git-semantic
+      dry-run: ${{ inputs.dry-run || false }}
+      release: ${{ inputs.release || false }}
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
