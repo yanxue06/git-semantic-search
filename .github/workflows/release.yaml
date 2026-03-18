@@ -25,6 +25,7 @@ jobs:
     with:
       service-name: git-semantic
       binary-name: git-semantic
+      crates: '["."]'
       dry-run: ${{ inputs.dry-run || false }}
       release: ${{ inputs.release || false }}
     secrets:
