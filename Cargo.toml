@@ -57,7 +57,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 directories = "6.0"
 
 # HTTP client for downloading models
-reqwest = { version = "0.12", features = ["blocking", "stream"] }
+reqwest = { version = "0.13", features = ["blocking", "stream"] }
 
 # Tokenization for text processing
 tokenizers = "0.22"
