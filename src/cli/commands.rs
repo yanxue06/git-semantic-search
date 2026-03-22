@@ -47,26 +47,37 @@ pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
     let path = Path::new(repo_path);
     let storage = IndexStorage::new(path)?;
 
-    let existing_index = if force {
-        None
-    } else {
-        match storage.load() {
-            Ok(idx) => Some(idx),
-            Err(IndexError::IndexNotFound) => None,
-            Err(e) => return Err(e).context("Failed to load existing index"),
-        }
+    let existing_index = match storage.load() {
+        Ok(idx) => Some(idx),
+        Err(IndexError::IndexNotFound) => None,
+        Err(e) => return Err(e).context("Failed to load existing index"),
     };
 
     match existing_index {
         Some(existing) => {
             let existing_mode = existing.metadata.include_diffs;
 
+            if force {
+                // Force rebuild — warn if downgrading from full to quick
+                if existing_mode && !include_diffs {
+                    println!(
+                        "⚠️  Downgrading from full mode to quick mode. This will discard \
+                         diff embeddings for {} commits.\n\
+                         Switching back to full mode later will require re-embedding all commits.\n",
+                        existing.entries.len()
+                    );
+                }
+                return full_index(path, &storage, include_diffs);
+            }
+
             if existing_mode != include_diffs {
                 if !include_diffs && existing_mode {
-                    // Full index already exists, quick is a subset — just do incremental with full mode
+                    // Full index already exists, quick is a superset — just do incremental with full mode
                     println!(
                         "ℹ️  Index was built in full mode (with diffs), which is a superset of quick mode.\n\
-                         Keeping full mode and checking for new commits.\n"
+                         Keeping full mode and checking for new commits.\n\
+                         To downgrade to quick mode (smaller index), run with --force.\n\
+                         Note: switching back to full mode later will require re-embedding all commits.\n"
                     );
                     incremental_index(path, &storage, existing, existing_mode)?;
                 } else {
