@@ -19,7 +19,7 @@ impl RepositoryParser {
     pub fn parse_commits(&self, include_diffs: bool) -> Result<Vec<CommitInfo>, GitError> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
-        revwalk.set_sorting(git2::Sort::TIME)?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
 
         let mut commits = Vec::new();
 
@@ -60,7 +60,7 @@ impl RepositoryParser {
     ) -> Result<Vec<CommitInfo>, GitError> {
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
-        revwalk.set_sorting(git2::Sort::TIME)?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
 
         let since_oid = git2::Oid::from_str(since_hash)?;
         let mut commits = Vec::new();
