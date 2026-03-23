@@ -6,6 +6,11 @@
 [![Crates.io](https://img.shields.io/crates/v/git-semantic?style=flat-square)](https://crates.io/crates/git-semantic)
 [![License](https://img.shields.io/github/license/yanxue06/git-semantic-search?style=flat-square)](LICENSE)
 
+Example: 
+
+https://github.com/user-attachments/assets/4345ee9c-387f-4192-9021-c40b6ad38e43
+
+
 **Search your git history using natural language - find commits by what they mean, not just what they say.**
 
 ```bash
