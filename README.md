@@ -6,11 +6,6 @@
 [![Crates.io](https://img.shields.io/crates/v/git-semantic?style=flat-square)](https://crates.io/crates/git-semantic)
 [![License](https://img.shields.io/github/license/yanxue06/git-semantic-search?style=flat-square)](LICENSE)
 
-Example: 
-
-https://github.com/user-attachments/assets/4345ee9c-387f-4192-9021-c40b6ad38e43
-
-
 **Search your git history using natural language - find commits by what they mean, not just what they say.**
 
 ```bash
@@ -26,6 +21,11 @@ $ git-semantic search "fixed race condition in authentication"
 ```
 
 Stop scrolling through hundreds of commits with `git log --grep`. Just describe what you're looking for in plain English.
+
+Example: 
+
+https://github.com/user-attachments/assets/91d33745-24ac-47ef-8a82-7ad6510eb17d
+
 
 ## Why?
 
