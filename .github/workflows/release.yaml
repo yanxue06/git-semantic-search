@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   release:
-    uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1.2.0
+    uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1.3.1
     with:
       service-name: git-semantic
       binary-name: git-semantic
