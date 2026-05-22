@@ -48,10 +48,14 @@ impl ModelManager {
             return Err(EmbeddingError::ModelNotDownloaded);
         }
 
-        let session = Session::builder()?
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_intra_threads(4)?
-            .commit_from_file(&model_path)?;
+        let session = Session::builder()
+            .map_err(ort::Error::from)?
+            .with_optimization_level(GraphOptimizationLevel::Level3)
+            .map_err(ort::Error::from)?
+            .with_intra_threads(4)
+            .map_err(ort::Error::from)?
+            .commit_from_file(&model_path)
+            .map_err(ort::Error::from)?;
 
         info!("Loading tokenizer...");
         let tokenizer_path = self.tokenizer_path();
