@@ -2,7 +2,7 @@ mod engine;
 mod error;
 mod filter;
 
-pub use engine::SearchEngine;
+pub use engine::{SearchEngine, SearchOptions, SearchOutcome, SearchStrategy};
 pub use error::SearchError;
 
 use crate::git::CommitInfo;
