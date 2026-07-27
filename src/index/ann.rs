@@ -75,7 +75,7 @@ pub fn build_graph(index: &SemanticIndex, params: HnswParams) -> HnswIndex {
 /// FNV-1a rather than `DefaultHasher` because SipHash keys are not stable
 /// across Rust releases, which would silently invalidate every cache on a
 /// toolchain bump.
-fn fingerprint(index: &SemanticIndex) -> u64 {
+pub(crate) fn fingerprint(index: &SemanticIndex) -> u64 {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0000_0100_0000_01b3;
 
