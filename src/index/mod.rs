@@ -1,11 +1,13 @@
-mod ann;
+pub(crate) mod ann;
 mod builder;
 mod error;
+mod lexical;
 mod storage;
 
 pub use ann::{AnnSidecar, EXACT_SCAN_THRESHOLD, build_graph};
 pub use builder::IndexBuilder;
 pub use error::IndexError;
+pub use lexical::{LexicalSidecar, build_lexical};
 pub use storage::IndexStorage;
 
 use chrono::{DateTime, Utc};

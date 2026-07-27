@@ -1,5 +1,7 @@
 pub mod commands;
 
+pub use crate::search::RetrievalMode;
+
 #[derive(Debug)]
 pub struct SearchFilters {
     pub author: Option<String>,

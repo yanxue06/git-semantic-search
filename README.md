@@ -41,6 +41,7 @@ git log -S "mutex"        # Maybe? 🤷
 ## Features
 
 - 🔍 **Natural language search** - "fix memory leak" finds more than just those exact words
+- 🎯 **Hybrid retrieval** - meaning *and* exact tokens: `CVE-2024-1234`, `src/auth.rs`, a commit hash
 - 🚀 **Fast** - Sub-millisecond retrieval, even on 50k-commit histories (HNSW graph index)
 - 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
 - 📦 **Zero config** - Works out of the box
@@ -98,6 +99,26 @@ git-semantic search "refactor" --file=src/index/      # prefix works too
 git-semantic search "feature" -n 5
 ```
 
+### Semantic, keyword, or both
+
+Embeddings are good at meaning and bad at exact strings — a 384-dimensional
+vector cannot reliably tell `CVE-2024-1234` from `CVE-2024-5678`. So search
+runs **both** an embedding search and a BM25 keyword search, then fuses the two
+rankings. That is the default; you can pin either side:
+
+```bash
+git-semantic search "race condition"      # hybrid (default)
+git-semantic search "CVE-2024-1234"       # hybrid — BM25 nails the exact token
+git-semantic search "auth" --mode semantic  # embeddings only (pre-1.5 behaviour)
+git-semantic search "Cargo.toml" --mode lexical  # keywords only
+```
+
+Fusion uses [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)
+rather than a weighted score blend. Cosine similarity sits in a narrow band
+while BM25 is unbounded and corpus-dependent, so any `α` tuned on one repository
+is wrong on the next. RRF discards the magnitudes and keeps only the ranks —
+nothing to calibrate, nothing to re-tune as the repo grows.
+
 ### Tuning search
 
 Repositories above 2,048 commits are searched through an approximate
@@ -146,6 +167,7 @@ git-semantic index --full
 - Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS)
 - Index: `.git/semantic-index` (per repository)
 - Search graph: `.git/semantic-index.hnsw` (rebuilt automatically when stale)
+- Keyword index: `.git/semantic-index.bm25` (same)
 
 ## Technical Details
 
@@ -153,7 +175,9 @@ git-semantic index --full
 - **Runtime**: ONNX Runtime for fast local inference
 - **Storage**: Bincode serialization (~3KB per Commit)
 - **Similarity**: Cosine, computed as a dot product over L2-normalized vectors
+- **Retrieval**: hybrid — HNSW vector search fused with BM25 via Reciprocal Rank Fusion
 - **Search**: [HNSW](https://arxiv.org/abs/1603.09320) graph traversal above 2,048 commits; exhaustive scan below, where it is genuinely faster
+- **Tokenizer**: code-aware — splits paths, `snake_case`, `camelCase`, and letter/digit boundaries, keeping the whole identifier too
 - **Recall**: ≥0.95 recall@10 against exhaustive search, asserted in CI
 
 ### Search performance
