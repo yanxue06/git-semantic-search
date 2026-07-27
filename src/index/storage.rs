@@ -1,9 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::text::{Bm25Index, Bm25Params};
 use crate::vector::{HnswIndex, HnswParams};
 
 use super::ann::{AnnSidecar, build_graph};
+use super::lexical::{LexicalSidecar, build_lexical};
 use super::{IndexError, SemanticIndex};
 
 pub struct IndexStorage {
@@ -39,11 +41,20 @@ impl IndexStorage {
     /// Path of the ANN graph sidecar. Sits beside the index inside the git dir
     /// so deleting the repository takes both.
     pub fn ann_path(&self) -> PathBuf {
+        self.sidecar_path("hnsw")
+    }
+
+    /// Path of the BM25 inverted-index sidecar.
+    pub fn lexical_path(&self) -> PathBuf {
+        self.sidecar_path("bm25")
+    }
+
+    fn sidecar_path(&self, extension: &str) -> PathBuf {
         let mut path = self.index_path.clone();
         let name = path
             .file_name()
-            .map(|n| format!("{}.hnsw", n.to_string_lossy()))
-            .unwrap_or_else(|| "semantic-index.hnsw".to_string());
+            .map(|n| format!("{}.{extension}", n.to_string_lossy()))
+            .unwrap_or_else(|| format!("semantic-index.{extension}"));
         path.set_file_name(name);
         path
     }
@@ -78,6 +89,51 @@ impl IndexStorage {
     pub fn refresh_ann(&self, index: &SemanticIndex, params: HnswParams) -> Result<(), IndexError> {
         let sidecar = AnnSidecar::new(index, build_graph(index, params));
         self.write_ann_sidecar(&sidecar)
+    }
+
+    /// Load the cached BM25 index, rebuilding when absent, stale, or unreadable.
+    ///
+    /// Same contract as [`Self::load_or_build_ann`]: the bool reports whether a
+    /// rebuild happened, and failing to persist is logged rather than raised.
+    pub fn load_or_build_lexical(
+        &self,
+        index: &SemanticIndex,
+        params: Bm25Params,
+    ) -> (Bm25Index, bool) {
+        if let Some(sidecar) = self.read_lexical_sidecar()
+            && sidecar.matches(index)
+        {
+            return (sidecar.into_index(), false);
+        }
+
+        let lexical = build_lexical(index, params);
+        let sidecar = LexicalSidecar::new(index, lexical.clone());
+        if let Err(err) = self.write_lexical_sidecar(&sidecar) {
+            tracing::debug!("could not cache BM25 index: {err}");
+        }
+
+        (lexical, true)
+    }
+
+    /// Build and persist the BM25 index unconditionally.
+    pub fn refresh_lexical(
+        &self,
+        index: &SemanticIndex,
+        params: Bm25Params,
+    ) -> Result<(), IndexError> {
+        let sidecar = LexicalSidecar::new(index, build_lexical(index, params));
+        self.write_lexical_sidecar(&sidecar)
+    }
+
+    fn read_lexical_sidecar(&self) -> Option<LexicalSidecar> {
+        let bytes = fs::read(self.lexical_path()).ok()?;
+        bincode::deserialize(&bytes).ok()
+    }
+
+    fn write_lexical_sidecar(&self, sidecar: &LexicalSidecar) -> Result<(), IndexError> {
+        let encoded = bincode::serialize(sidecar)?;
+        fs::write(self.lexical_path(), encoded)?;
+        Ok(())
     }
 
     /// A missing, truncated, or format-mismatched sidecar is a cache miss.
@@ -116,6 +172,7 @@ mod tests {
     use super::*;
     use crate::git::CommitInfo;
     use crate::index::{IndexEntry, SemanticIndex};
+    use crate::text::Bm25Params;
     use tempfile::TempDir;
 
     fn index_with(count: usize) -> SemanticIndex {
@@ -299,6 +356,79 @@ mod tests {
         let (graph, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
         assert!(rebuilt, "corrupt cache is a miss, not an error");
         assert_eq!(graph.len(), 20);
+    }
+
+    #[test]
+    fn test_lexical_path_sits_beside_the_index() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        assert_eq!(
+            storage.lexical_path(),
+            dir.path().join(".git").join("semantic-index.bm25")
+        );
+    }
+
+    #[test]
+    fn test_lexical_and_ann_sidecars_do_not_collide() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        assert_ne!(storage.ann_path(), storage.lexical_path());
+    }
+
+    #[test]
+    fn test_load_or_build_lexical_builds_then_caches() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(40);
+
+        let (lexical, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
+        assert!(rebuilt, "first call has nothing to load");
+        assert_eq!(lexical.len(), 40);
+        assert!(storage.lexical_path().exists());
+
+        let (cached, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
+        assert!(!rebuilt, "second call should hit the cache");
+        assert_eq!(cached.len(), 40);
+    }
+
+    #[test]
+    fn test_load_or_build_lexical_survives_corrupt_sidecar() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(20);
+
+        fs::write(storage.lexical_path(), b"garbage").unwrap();
+
+        let (lexical, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
+        assert!(rebuilt, "corrupt cache is a miss, not an error");
+        assert_eq!(lexical.len(), 20);
+    }
+
+    #[test]
+    fn test_load_or_build_lexical_rebuilds_when_index_grows() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+
+        storage.load_or_build_lexical(&index_with(10), Bm25Params::default());
+
+        let (lexical, rebuilt) =
+            storage.load_or_build_lexical(&index_with(15), Bm25Params::default());
+        assert!(rebuilt);
+        assert_eq!(lexical.len(), 15);
+    }
+
+    #[test]
+    fn test_refresh_lexical_writes_a_usable_sidecar() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(25);
+
+        storage
+            .refresh_lexical(&index, Bm25Params::default())
+            .unwrap();
+
+        let (_, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
+        assert!(!rebuilt);
     }
 
     #[test]

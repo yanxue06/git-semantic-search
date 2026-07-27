@@ -1,9 +1,11 @@
 mod engine;
 mod error;
 mod filter;
+mod fusion;
 
-pub use engine::{SearchEngine, SearchOptions, SearchOutcome, SearchStrategy};
+pub use engine::{RetrievalMode, SearchEngine, SearchOptions, SearchOutcome, SearchStrategy};
 pub use error::SearchError;
+pub use fusion::{RRF_K, Ranking, reciprocal_rank_fusion};
 
 use crate::git::CommitInfo;
 use serde::{Deserialize, Serialize};

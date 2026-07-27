@@ -7,7 +7,8 @@ use tracing::info;
 use crate::embedding::ModelManager;
 use crate::git::{GitError, RepositoryParser};
 use crate::index::{EXACT_SCAN_THRESHOLD, IndexBuilder, IndexError, IndexStorage, SemanticIndex};
-use crate::search::{SearchEngine, SearchOptions, SearchStrategy};
+use crate::search::{RetrievalMode, SearchEngine, SearchOptions, SearchStrategy};
+use crate::text::Bm25Params;
 use crate::vector::HnswParams;
 
 use super::SearchFilters;
@@ -226,11 +227,29 @@ pub fn search(
     filters: SearchFilters,
     exact: bool,
     ef: Option<usize>,
+    mode: RetrievalMode,
 ) -> Result<()> {
     let path = Path::new(repo_path);
 
     let storage = IndexStorage::new(path)?;
     let index = storage.load()?;
+
+    // BM25 is cheap to build and independent of repository size, so it is
+    // loaded whenever lexical retrieval is in play.
+    let lexical = if mode.uses_lexical() && !index.entries.is_empty() {
+        let build_started = Instant::now();
+        let (lexical, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
+        if rebuilt {
+            println!(
+                "🔧 Built keyword index for {} commits in {:.1}s (cached for next time)\n",
+                lexical.len(),
+                build_started.elapsed().as_secs_f64()
+            );
+        }
+        Some(lexical)
+    } else {
+        None
+    };
 
     // Below the exact-scan threshold the graph is never consulted, so don't pay
     // to load or build it either.
@@ -256,12 +275,14 @@ pub fn search(
     let outcome = engine.search(
         &index,
         graph.as_ref(),
+        lexical.as_ref(),
         query,
         SearchOptions {
             num_results,
             filters,
             exact,
             ef,
+            mode,
         },
     )?;
     let elapsed = started.elapsed();
@@ -274,12 +295,19 @@ pub fn search(
     println!("🎯 Most Relevant Commits for: \"{}\"\n", query);
 
     for result in &outcome.results {
+        // A fused or lexical hit has no cosine to report; showing a BM25 score
+        // in a column labelled "similarity" would be a lie.
+        let score = if result.similarity.is_nan() {
+            "keyword match".to_string()
+        } else {
+            format!("{:.2} similarity", result.similarity)
+        };
         println!(
-            "{}. {} - {} ({:.2} similarity)",
+            "{}. {} - {} ({})",
             result.rank,
             &result.commit.hash[..7],
             result.commit.message.lines().next().unwrap_or(""),
-            result.similarity
+            score
         );
         println!(
             "   Author: {}, {}",
@@ -308,8 +336,9 @@ pub fn search(
         SearchStrategy::ApproximateThenExact => "graph search, verified exhaustively",
     };
     println!(
-        "Searched {} commits via {} in {:.0}ms",
+        "Searched {} commits via {} {} in {:.0}ms",
         outcome.candidate_count,
+        outcome.mode.as_str(),
         how,
         elapsed.as_secs_f64() * 1000.0
     );
@@ -337,6 +366,14 @@ pub fn stats(repo_path: &str) -> Result<()> {
         }
     );
     println!("Index size: ~{:.2} MB", storage.index_size_mb()?);
+    println!(
+        "Keyword index: {}",
+        if storage.lexical_path().exists() {
+            "BM25 (cached)"
+        } else {
+            "BM25 (builds on next search)"
+        }
+    );
     println!(
         "Search strategy: {}",
         if index.entries.len() <= EXACT_SCAN_THRESHOLD {
@@ -393,6 +430,12 @@ fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()
 /// is reported, not propagated — the index itself saved fine and search falls
 /// back to an exhaustive scan.
 fn refresh_search_graph(index: &SemanticIndex, storage: &IndexStorage) {
+    if !index.entries.is_empty()
+        && let Err(err) = storage.refresh_lexical(index, Bm25Params::default())
+    {
+        info!("keyword index will be rebuilt on first search: {err}");
+    }
+
     if index.entries.len() <= EXACT_SCAN_THRESHOLD {
         return;
     }

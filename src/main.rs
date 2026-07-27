@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use git_semantic::{cli, embedding, git, index, search};
 use std::process;
 
@@ -9,6 +9,27 @@ use std::process;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+}
+
+/// CLI surface for [`cli::RetrievalMode`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum Mode {
+    /// Fuse semantic and keyword results (default)
+    Hybrid,
+    /// Embedding similarity only
+    Semantic,
+    /// Keyword (BM25) matching only
+    Lexical,
+}
+
+impl From<Mode> for cli::RetrievalMode {
+    fn from(mode: Mode) -> Self {
+        match mode {
+            Mode::Hybrid => Self::Hybrid,
+            Mode::Semantic => Self::Semantic,
+            Mode::Lexical => Self::Lexical,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -79,6 +100,10 @@ enum Commands {
         #[arg(long, value_name = "N")]
         ef: Option<usize>,
 
+        /// Which retrievers to use
+        #[arg(long, value_enum, default_value_t = Mode::Hybrid)]
+        mode: Mode,
+
         /// Repository path (defaults to current directory)
         #[arg(long)]
         path: Option<String>,
@@ -131,6 +156,7 @@ fn main() {
             file,
             exact,
             ef,
+            mode,
             path,
         } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
@@ -140,7 +166,7 @@ fn main() {
                 before,
                 file,
             };
-            cli::commands::search(&repo_path, &query, results, filters, exact, ef)
+            cli::commands::search(&repo_path, &query, results, filters, exact, ef, mode.into())
         }
         Commands::Stats { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
