@@ -1,79 +1,134 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::cli::SearchFilters;
+use crate::git::CommitInfo;
 
-use super::{SearchError, SearchResult};
+use super::SearchError;
 
+/// Metadata filters, compiled once per query.
+///
+/// The previous version re-parsed `--after` and `--before` on every call and
+/// only knew how to transform a fully materialized result list. Search now
+/// evaluates filters *before* scoring, so it needs a per-commit predicate that
+/// is cheap enough to run N times — hence parsing up front and lowercasing the
+/// author once.
 pub struct FilterEngine {
-    filters: SearchFilters,
+    author: Option<String>,
+    after: Option<DateTime<Utc>>,
+    before: Option<DateTime<Utc>>,
+    file: Option<String>,
 }
 
 impl FilterEngine {
-    pub fn new(filters: SearchFilters) -> Self {
-        Self { filters }
+    /// Compile raw CLI strings, surfacing date errors immediately.
+    pub fn new(filters: SearchFilters) -> Result<Self, SearchError> {
+        let after = filters
+            .after
+            .as_deref()
+            .map(|raw| parse_day(raw, DayEdge::Start))
+            .transpose()?;
+
+        let before = filters
+            .before
+            .as_deref()
+            .map(|raw| parse_day(raw, DayEdge::End))
+            .transpose()?;
+
+        Ok(Self {
+            author: filters.author.map(|a| a.to_lowercase()),
+            after,
+            before,
+            file: filters.file,
+        })
     }
 
-    pub fn apply(&self, results: Vec<SearchResult>) -> Result<Vec<SearchResult>, SearchError> {
-        let mut filtered = results;
-
-        if let Some(ref author) = self.filters.author {
-            filtered.retain(|r| {
-                r.commit
-                    .author
-                    .to_lowercase()
-                    .contains(&author.to_lowercase())
-            });
-        }
-
-        if let Some(ref after) = self.filters.after {
-            let after_date = NaiveDate::parse_from_str(after, "%Y-%m-%d").map_err(|e| {
-                SearchError::InvalidDateFormat {
-                    value: after.clone(),
-                    source: e,
-                }
-            })?;
-            let after_datetime = after_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-            filtered.retain(|r| r.commit.date >= after_datetime);
-        }
-
-        if let Some(ref before) = self.filters.before {
-            let before_date = NaiveDate::parse_from_str(before, "%Y-%m-%d").map_err(|e| {
-                SearchError::InvalidDateFormat {
-                    value: before.clone(),
-                    source: e,
-                }
-            })?;
-            let before_datetime = before_date.and_hms_opt(23, 59, 59).unwrap().and_utc();
-            filtered.retain(|r| r.commit.date <= before_datetime);
-        }
-
-        if let Some(ref file) = self.filters.file {
-            filtered.retain(|r| r.commit.diff_summary.contains(file));
-        }
-
-        Ok(filtered)
+    /// True when at least one filter would exclude something.
+    pub fn is_active(&self) -> bool {
+        self.author.is_some()
+            || self.after.is_some()
+            || self.before.is_some()
+            || self.file.is_some()
     }
+
+    /// Whether `commit` passes every active filter.
+    pub fn matches(&self, commit: &CommitInfo) -> bool {
+        if let Some(author) = &self.author
+            && !commit.author.to_lowercase().contains(author)
+        {
+            return false;
+        }
+
+        if let Some(after) = self.after
+            && commit.date < after
+        {
+            return false;
+        }
+
+        if let Some(before) = self.before
+            && commit.date > before
+        {
+            return false;
+        }
+
+        if let Some(file) = &self.file
+            && !commit.diff_summary.contains(file)
+        {
+            return false;
+        }
+
+        true
+    }
+}
+
+enum DayEdge {
+    Start,
+    End,
+}
+
+/// Parse `YYYY-MM-DD` to an inclusive bound at the requested edge of the day.
+fn parse_day(raw: &str, edge: DayEdge) -> Result<DateTime<Utc>, SearchError> {
+    let date =
+        NaiveDate::parse_from_str(raw, "%Y-%m-%d").map_err(|e| SearchError::InvalidDateFormat {
+            value: raw.to_string(),
+            source: e,
+        })?;
+
+    let time = match edge {
+        DayEdge::Start => date.and_hms_opt(0, 0, 0),
+        DayEdge::End => date.and_hms_opt(23, 59, 59),
+    };
+
+    // Both literals are valid for every representable date, so this cannot fail;
+    // the fallback keeps the function total instead of panicking.
+    Ok(time
+        .unwrap_or_else(|| date.and_hms_opt(0, 0, 0).unwrap_or_default())
+        .and_utc())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::git::CommitInfo;
 
-    fn make_result(author: &str, date: &str, diff_summary: &str) -> SearchResult {
-        SearchResult {
-            commit: CommitInfo {
-                hash: "abc1234".to_string(),
-                author: author.to_string(),
-                date: chrono::DateTime::parse_from_rfc3339(&format!("{date}T12:00:00Z"))
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
-                message: "test commit".to_string(),
-                diff_summary: diff_summary.to_string(),
-            },
-            similarity: 0.9,
-            rank: 1,
+    fn commit(author: &str, date: &str, diff_summary: &str) -> CommitInfo {
+        CommitInfo {
+            hash: "abc1234".to_string(),
+            author: author.to_string(),
+            date: chrono::DateTime::parse_from_rfc3339(&format!("{date}T12:00:00Z"))
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+            message: "test commit".to_string(),
+            diff_summary: diff_summary.to_string(),
         }
+    }
+
+    /// Authors of the commits that survive the filter — the pre-scoring
+    /// candidate set the engine will actually score.
+    fn surviving(engine: &FilterEngine, commits: &[CommitInfo]) -> Vec<String> {
+        commits
+            .iter()
+            .filter(|c| !engine.is_active() || engine.matches(c))
+            .map(|c| c.author.clone())
+            .collect()
     }
 
     fn no_filters() -> SearchFilters {
@@ -87,146 +142,206 @@ mod tests {
 
     #[test]
     fn test_no_filters_passes_all() {
-        let results = vec![
-            make_result("Alice", "2024-06-01", ""),
-            make_result("Bob", "2024-07-01", ""),
+        let commits = [
+            commit("Alice", "2024-06-01", ""),
+            commit("Bob", "2024-07-01", ""),
         ];
-        let engine = FilterEngine::new(no_filters());
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 2);
+        let engine = FilterEngine::new(no_filters()).unwrap();
+        assert!(!engine.is_active());
+        assert_eq!(surviving(&engine, &commits).len(), 2);
     }
 
     #[test]
     fn test_author_filter_case_insensitive() {
-        let results = vec![
-            make_result("Alice Chen", "2024-06-01", ""),
-            make_result("Bob Martinez", "2024-07-01", ""),
+        let commits = [
+            commit("Alice Chen", "2024-06-01", ""),
+            commit("Bob Martinez", "2024-07-01", ""),
         ];
         let engine = FilterEngine::new(SearchFilters {
             author: Some("alice".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].commit.author, "Alice Chen");
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Alice Chen"]);
     }
 
     #[test]
     fn test_author_filter_partial_match() {
-        let results = vec![
-            make_result("Alice Chen", "2024-06-01", ""),
-            make_result("Bob Martinez", "2024-07-01", ""),
+        let commits = [
+            commit("Alice Chen", "2024-06-01", ""),
+            commit("Bob Martinez", "2024-07-01", ""),
         ];
         let engine = FilterEngine::new(SearchFilters {
             author: Some("chen".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 1);
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Alice Chen"]);
     }
 
     #[test]
     fn test_after_date_filter() {
-        let results = vec![
-            make_result("Alice", "2024-01-15", ""),
-            make_result("Bob", "2024-06-15", ""),
-            make_result("Carol", "2024-12-01", ""),
+        let commits = [
+            commit("Alice", "2024-01-15", ""),
+            commit("Bob", "2024-06-15", ""),
+            commit("Carol", "2024-12-01", ""),
         ];
         let engine = FilterEngine::new(SearchFilters {
             after: Some("2024-06-01".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 2);
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Bob", "Carol"]);
     }
 
     #[test]
     fn test_before_date_filter() {
-        let results = vec![
-            make_result("Alice", "2024-01-15", ""),
-            make_result("Bob", "2024-06-15", ""),
-            make_result("Carol", "2024-12-01", ""),
+        let commits = [
+            commit("Alice", "2024-01-15", ""),
+            commit("Bob", "2024-06-15", ""),
+            commit("Carol", "2024-12-01", ""),
         ];
         let engine = FilterEngine::new(SearchFilters {
             before: Some("2024-06-30".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 2);
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Alice", "Bob"]);
     }
 
     #[test]
     fn test_date_range_filter() {
-        let results = vec![
-            make_result("Alice", "2024-01-15", ""),
-            make_result("Bob", "2024-06-15", ""),
-            make_result("Carol", "2024-12-01", ""),
+        let commits = [
+            commit("Alice", "2024-01-15", ""),
+            commit("Bob", "2024-06-15", ""),
+            commit("Carol", "2024-12-01", ""),
         ];
         let engine = FilterEngine::new(SearchFilters {
             after: Some("2024-03-01".to_string()),
             before: Some("2024-09-01".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].commit.author, "Bob");
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Bob"]);
     }
 
     #[test]
     fn test_file_filter() {
-        let results = vec![
-            make_result("Alice", "2024-06-01", "+modified src/auth.rs\n-old line"),
-            make_result("Bob", "2024-07-01", "+modified src/main.rs"),
+        let commits = [
+            commit("Alice", "2024-06-01", "+modified src/auth.rs\n-old line"),
+            commit("Bob", "2024-07-01", "+modified src/main.rs"),
         ];
         let engine = FilterEngine::new(SearchFilters {
             file: Some("src/auth.rs".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].commit.author, "Alice");
+        })
+        .unwrap();
+        assert_eq!(surviving(&engine, &commits), vec!["Alice"]);
     }
 
     #[test]
     fn test_combined_filters() {
-        let results = vec![
-            make_result("Alice", "2024-06-01", "+src/auth.rs"),
-            make_result("Alice", "2024-01-01", "+src/auth.rs"),
-            make_result("Bob", "2024-06-01", "+src/auth.rs"),
+        let commits = [
+            commit("Alice", "2024-06-01", "+src/auth.rs"),
+            commit("Alice", "2024-01-01", "+src/auth.rs"),
+            commit("Bob", "2024-06-01", "+src/auth.rs"),
         ];
         let engine = FilterEngine::new(SearchFilters {
             author: Some("alice".to_string()),
             after: Some("2024-03-01".to_string()),
             file: Some("src/auth.rs".to_string()),
             before: None,
+        })
+        .unwrap();
+
+        let kept: Vec<&CommitInfo> = commits.iter().filter(|c| engine.matches(c)).collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].author, "Alice");
+        assert_eq!(kept[0].date.format("%Y-%m-%d").to_string(), "2024-06-01");
+    }
+
+    #[test]
+    fn test_invalid_date_format_fails_at_compile_time() {
+        let result = FilterEngine::new(SearchFilters {
+            after: Some("not-a-date".to_string()),
+            ..no_filters()
         });
-        let filtered = engine.apply(results).unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].commit.author, "Alice");
-        assert_eq!(
-            filtered[0].commit.date.format("%Y-%m-%d").to_string(),
-            "2024-06-01"
+        assert!(
+            result.is_err(),
+            "a bad date should fail before any embedding work"
         );
     }
 
     #[test]
-    fn test_invalid_date_format_returns_error() {
-        let results = vec![make_result("Alice", "2024-06-01", "")];
-        let engine = FilterEngine::new(SearchFilters {
-            after: Some("not-a-date".to_string()),
+    fn test_invalid_before_date_is_also_rejected() {
+        let result = FilterEngine::new(SearchFilters {
+            before: Some("2024-13-45".to_string()),
             ..no_filters()
         });
-        assert!(engine.apply(results).is_err());
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_filter_returns_empty_when_nothing_matches() {
-        let results = vec![make_result("Alice", "2024-06-01", "")];
+        let commits = [commit("Alice", "2024-06-01", "")];
         let engine = FilterEngine::new(SearchFilters {
             author: Some("nonexistent".to_string()),
             ..no_filters()
-        });
-        let filtered = engine.apply(results).unwrap();
-        assert!(filtered.is_empty());
+        })
+        .unwrap();
+        assert!(surviving(&engine, &commits).is_empty());
+    }
+
+    #[test]
+    fn test_matches_is_case_insensitive_on_author() {
+        let engine = FilterEngine::new(SearchFilters {
+            author: Some("alice".to_string()),
+            ..no_filters()
+        })
+        .unwrap();
+
+        assert!(engine.matches(&commit("Alice Chen", "2024-06-01", "")));
+        assert!(!engine.matches(&commit("Bob Martinez", "2024-06-01", "")));
+    }
+
+    #[test]
+    fn test_is_active_reflects_each_filter() {
+        assert!(!FilterEngine::new(no_filters()).unwrap().is_active());
+
+        for filters in [
+            SearchFilters {
+                author: Some("a".into()),
+                ..no_filters()
+            },
+            SearchFilters {
+                after: Some("2024-01-01".into()),
+                ..no_filters()
+            },
+            SearchFilters {
+                before: Some("2024-01-01".into()),
+                ..no_filters()
+            },
+            SearchFilters {
+                file: Some("f".into()),
+                ..no_filters()
+            },
+        ] {
+            assert!(FilterEngine::new(filters).unwrap().is_active());
+        }
+    }
+
+    #[test]
+    fn test_date_bounds_are_inclusive() {
+        let engine = FilterEngine::new(SearchFilters {
+            after: Some("2024-06-15".to_string()),
+            before: Some("2024-06-15".to_string()),
+            ..no_filters()
+        })
+        .unwrap();
+
+        assert!(
+            engine.matches(&commit("Alice", "2024-06-15", "")),
+            "a commit on the boundary day must be included"
+        );
     }
 }

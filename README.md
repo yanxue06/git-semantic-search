@@ -41,7 +41,7 @@ git log -S "mutex"        # Maybe? 🤷
 ## Features
 
 - 🔍 **Natural language search** - "fix memory leak" finds more than just those exact words
-- 🚀 **Fast** - Results in < 100ms
+- 🚀 **Fast** - Sub-millisecond retrieval, even on 50k-commit histories (HNSW graph index)
 - 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
 - 📦 **Zero config** - Works out of the box
 - 🎯 **Smart filtering** - By author, date, file, and more
@@ -96,6 +96,25 @@ git-semantic search "optimization" --file=src/auth.rs
 git-semantic search "feature" -n 5
 ```
 
+### Tuning search
+
+Repositories above 2,048 commits are searched through an approximate
+nearest-neighbor graph. Two escape hatches let you trade speed for accuracy:
+
+```bash
+# Score every commit — exact, and the baseline the graph is measured against
+git-semantic search "race condition" --exact
+
+# Widen the graph's candidate list: slower, higher recall (default 64)
+git-semantic search "race condition" --ef 256
+```
+
+Every search prints how it ran, so the tradeoff is never invisible:
+
+```
+Searched 48213 commits via graph search in 1ms
+```
+
 ### Index Management
 
 ```bash
@@ -117,20 +136,39 @@ git-semantic index --full
 1. **Downloads BGE-small-en-v1.5** - A compact AI model (130MB) for semantic embeddings
 2. **Indexes your repo** - Converts each commit into a 384-dimensional vector
 3. **Stores locally** - Binary index saved in `.git/semantic-index` (ignored by git)
-4. **Searches by meaning** - Your query becomes a vector, finds similar commit vectors using cosine similarity
-5. **ONNX Runtime** - Fast local inference, no cloud services needed
+4. **Builds a proximity graph** - An HNSW index over those vectors, cached in `.git/semantic-index.hnsw`
+5. **Searches by meaning** - Your query becomes a vector; the graph finds its nearest commit vectors without touching most of the repository
+6. **ONNX Runtime** - Fast local inference, no cloud services needed
 
 **Stored locations:**
 - Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS)
 - Index: `.git/semantic-index` (per repository)
+- Search graph: `.git/semantic-index.hnsw` (rebuilt automatically when stale)
 
 ## Technical Details
 
 - **Model**: BGE-small-en-v1.5 (BAAI)
 - **Runtime**: ONNX Runtime for fast local inference
 - **Storage**: Bincode serialization (~3KB per Commit)
-- **Search**: Cosine similarity with L2 normalization
-- **Inference**: < 100ms per query
+- **Similarity**: Cosine, computed as a dot product over L2-normalized vectors
+- **Search**: [HNSW](https://arxiv.org/abs/1603.09320) graph traversal above 2,048 commits; exhaustive scan below, where it is genuinely faster
+- **Recall**: ≥0.95 recall@10 against exhaustive search, asserted in CI
+
+### Search performance
+
+Top-10 query latency over 384-dimensional embeddings, Apple silicon, `cargo bench`:
+
+| Commits | Exhaustive scan | HNSW graph | Speedup |
+|--------:|----------------:|-----------:|--------:|
+|   1,000 |          24 µs  |     34 µs  |  0.7x   |
+|  10,000 |         235 µs  |     72 µs  |  3.3x   |
+|  50,000 |        1180 µs  |     76 µs  | 15.5x   |
+
+Exhaustive scan wins below ~2k commits, which is exactly where the graph is
+skipped. Graph latency is near-flat in repository size; the scan is linear.
+
+Building the graph costs ~0.5s per 1k commits, once, and is cached — a rounding
+error next to embedding the same commits through ONNX.
 
 ## Real Example
 

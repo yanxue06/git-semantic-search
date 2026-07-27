@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
+use std::time::Instant;
 use tracing::info;
 
 use crate::embedding::ModelManager;
 use crate::git::{GitError, RepositoryParser};
-use crate::index::{IndexBuilder, IndexError, IndexStorage, SemanticIndex};
-use crate::search::SearchEngine;
+use crate::index::{EXACT_SCAN_THRESHOLD, IndexBuilder, IndexError, IndexStorage, SemanticIndex};
+use crate::search::{SearchEngine, SearchOptions, SearchStrategy};
+use crate::vector::HnswParams;
 
 use super::SearchFilters;
 
@@ -138,6 +140,7 @@ fn full_index(path: &Path, storage: &IndexStorage, include_diffs: bool) -> Resul
     storage.save(&index)?;
 
     print_index_stats(&index, storage)?;
+    refresh_search_graph(&index, storage);
 
     Ok(())
 }
@@ -203,6 +206,7 @@ fn incremental_index(
     storage.save(&index)?;
 
     print_index_stats(&index, storage)?;
+    refresh_search_graph(&index, storage);
 
     Ok(())
 }
@@ -220,24 +224,56 @@ pub fn search(
     query: &str,
     num_results: usize,
     filters: SearchFilters,
+    exact: bool,
+    ef: Option<usize>,
 ) -> Result<()> {
     let path = Path::new(repo_path);
 
     let storage = IndexStorage::new(path)?;
     let index = storage.load()?;
 
+    // Below the exact-scan threshold the graph is never consulted, so don't pay
+    // to load or build it either.
+    let graph = if exact || index.entries.len() <= EXACT_SCAN_THRESHOLD {
+        None
+    } else {
+        let build_started = Instant::now();
+        let (graph, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
+        if rebuilt {
+            println!(
+                "🔧 Built search graph for {} commits in {:.1}s (cached for next time)\n",
+                graph.len(),
+                build_started.elapsed().as_secs_f64()
+            );
+        }
+        Some(graph)
+    };
+
     let model_manager = ModelManager::new()?;
     let mut engine = SearchEngine::new(model_manager)?;
-    let results = engine.search(&index, query, num_results, filters)?;
 
-    if results.is_empty() {
+    let started = Instant::now();
+    let outcome = engine.search(
+        &index,
+        graph.as_ref(),
+        query,
+        SearchOptions {
+            num_results,
+            filters,
+            exact,
+            ef,
+        },
+    )?;
+    let elapsed = started.elapsed();
+
+    if outcome.results.is_empty() {
         println!("No results found for: \"{}\"", query);
         return Ok(());
     }
 
     println!("🎯 Most Relevant Commits for: \"{}\"\n", query);
 
-    for result in results {
+    for result in &outcome.results {
         println!(
             "{}. {} - {} ({:.2} similarity)",
             result.rank,
@@ -266,6 +302,18 @@ pub fn search(
         println!();
     }
 
+    let how = match outcome.strategy {
+        SearchStrategy::Exact => "exhaustive scan",
+        SearchStrategy::Approximate => "graph search",
+        SearchStrategy::ApproximateThenExact => "graph search, verified exhaustively",
+    };
+    println!(
+        "Searched {} commits via {} in {:.0}ms",
+        outcome.candidate_count,
+        how,
+        elapsed.as_secs_f64() * 1000.0
+    );
+
     Ok(())
 }
 
@@ -289,6 +337,16 @@ pub fn stats(repo_path: &str) -> Result<()> {
         }
     );
     println!("Index size: ~{:.2} MB", storage.index_size_mb()?);
+    println!(
+        "Search strategy: {}",
+        if index.entries.len() <= EXACT_SCAN_THRESHOLD {
+            format!("exhaustive scan (under the {EXACT_SCAN_THRESHOLD}-commit graph threshold)")
+        } else if storage.ann_path().exists() {
+            "HNSW graph (cached)".to_string()
+        } else {
+            "HNSW graph (builds on next search)".to_string()
+        }
+    );
     println!(
         "Created: {}",
         index.metadata.created_at.format("%Y-%m-%d %H:%M:%S")
@@ -327,4 +385,29 @@ fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()
     println!("  - Model: {}", index.model_version);
     println!("  - Index size: ~{:.2} MB", storage.index_size_mb()?);
     Ok(())
+}
+
+/// Build the ANN graph now so the first search doesn't pay for it.
+///
+/// Skipped for small repositories, which never consult the graph. A failure here
+/// is reported, not propagated — the index itself saved fine and search falls
+/// back to an exhaustive scan.
+fn refresh_search_graph(index: &SemanticIndex, storage: &IndexStorage) {
+    if index.entries.len() <= EXACT_SCAN_THRESHOLD {
+        return;
+    }
+
+    let started = Instant::now();
+    println!(
+        "\n🔧 Building search graph for {} commits...",
+        index.entries.len()
+    );
+
+    match storage.refresh_ann(index, HnswParams::default()) {
+        Ok(()) => println!("  done in {:.1}s", started.elapsed().as_secs_f64()),
+        Err(err) => {
+            println!("  skipped ({err})");
+            info!("ANN graph will be rebuilt on first search");
+        }
+    }
 }

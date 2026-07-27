@@ -1,7 +1,9 @@
+mod ann;
 mod builder;
 mod error;
 mod storage;
 
+pub use ann::{AnnSidecar, EXACT_SCAN_THRESHOLD, build_graph};
 pub use builder::IndexBuilder;
 pub use error::IndexError;
 pub use storage::IndexStorage;

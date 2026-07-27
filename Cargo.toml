@@ -68,10 +68,21 @@ tokenizers = "0.23"
 
 [dev-dependencies]
 tempfile = "3.8"
+criterion = "0.7"
+
+[[bench]]
+name = "search"
+harness = false
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+# The recall tests build HNSW graphs over thousands of embeddings. Unoptimized
+# SIMD-shaped loops make that roughly 4x slower for no diagnostic benefit;
+# `debug_assert!` and overflow checks still fire at this opt-level.
+[profile.test]
+opt-level = 2
 
