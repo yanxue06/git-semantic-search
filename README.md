@@ -42,6 +42,8 @@ git log -S "mutex"        # Maybe? 🤷
 
 - 🔍 **Natural language search** - "fix memory leak" finds more than just those exact words
 - 🎯 **Hybrid retrieval** - meaning *and* exact tokens: `CVE-2024-1234`, `src/auth.rs`, a commit hash
+- 🧩 **Diverse results** - `--diverse` stops ten near-identical dependency bumps from filling the page
+- 🤖 **Scriptable** - `--json` for piping into `jq`, a script, or an LLM
 - 🚀 **Fast** - Sub-millisecond retrieval, even on 50k-commit histories (HNSW graph index)
 - 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
 - 📦 **Zero config** - Works out of the box
@@ -119,6 +121,57 @@ while BM25 is unbounded and corpus-dependent, so any `α` tuned on one repositor
 is wrong on the next. RRF discards the magnitudes and keeps only the ranks —
 nothing to calibrate, nothing to re-tune as the repo grows.
 
+### Diverse results
+
+Relevance ranking has no opinion about redundancy. Ask a busy repo for
+"dependency update" and the top ten are ten renovate commits that differ only in
+a crate name — technically the ten best answers, practically one answer repeated
+ten times.
+
+```bash
+git-semantic search "dependency update" --diverse
+git-semantic search "refactor" --diverse --lambda 0.5   # push harder for novelty
+```
+
+`--diverse` reranks with [Maximal Marginal Relevance](https://dl.acm.org/doi/10.1145/290941.291025),
+picking each result on relevance *minus* similarity to what is already shown.
+`--lambda` balances the two: `1.0` is pure relevance, `0.0` pure novelty,
+default `0.7`. The top result never moves.
+
+### Scripting
+
+```bash
+git-semantic search "race condition" --json | jq -r '.results[].hash'
+git-semantic search "auth" --json | jq '.results[] | {subject, files}'
+```
+
+```json
+{
+  "query": "race condition",
+  "mode": "hybrid",
+  "strategy": "approximate",
+  "candidates": 48213,
+  "diversified": false,
+  "took_ms": 1.4,
+  "results": [
+    {
+      "rank": 1,
+      "hash": "abc1234def5678901234567890123456789012ab",
+      "author": "Alice Chen",
+      "date": "2024-06-15T12:00:00+00:00",
+      "subject": "fix: resolve race condition in auth",
+      "message": "fix: resolve race condition in auth\n\nUse a mutex...",
+      "files": ["src/auth.rs"],
+      "similarity": 0.83
+    }
+  ]
+}
+```
+
+Full 40-character hashes, RFC 3339 dates, and `similarity` omitted entirely on
+keyword-only hits — JSON cannot represent NaN, so the field is absent rather
+than null.
+
 ### Tuning search
 
 Repositories above 2,048 commits are searched through an approximate
@@ -178,6 +231,7 @@ git-semantic index --full
 - **Retrieval**: hybrid — HNSW vector search fused with BM25 via Reciprocal Rank Fusion
 - **Search**: [HNSW](https://arxiv.org/abs/1603.09320) graph traversal above 2,048 commits; exhaustive scan below, where it is genuinely faster
 - **Tokenizer**: code-aware — splits paths, `snake_case`, `camelCase`, and letter/digit boundaries, keeping the whole identifier too
+- **Diversification**: optional MMR rerank over the retrieved pool
 - **Recall**: ≥0.95 recall@10 against exhaustive search, asserted in CI
 
 ### Search performance
