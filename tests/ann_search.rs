@@ -74,11 +74,7 @@ fn exact_ranking(index: &SemanticIndex, query: &[f32], k: usize) -> Vec<u32> {
         .enumerate()
         .map(|(i, e)| (dot(&e.embedding, query), i as u32))
         .collect();
-    scored.sort_by(|a, b| {
-        b.0.partial_cmp(&a.0)
-            .unwrap()
-            .then_with(|| a.1.cmp(&b.1))
-    });
+    scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap().then_with(|| a.1.cmp(&b.1)));
     scored.into_iter().take(k).map(|(_, i)| i).collect()
 }
 
@@ -205,8 +201,7 @@ fn filtered_graph_search_returns_only_matching_commits_and_fills_k() {
     assert_eq!(hits.len(), 10, "a 1-in-3 filter must still fill k results");
     for (id, _) in hits {
         assert_eq!(
-            index.entries[id as usize].commit.author,
-            "renovate[bot]",
+            index.entries[id as usize].commit.author, "renovate[bot]",
             "filter leaked a non-matching commit"
         );
     }
