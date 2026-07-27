@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::vector::{HnswIndex, HnswParams};
+
+use super::ann::{AnnSidecar, build_graph};
 use super::{IndexError, SemanticIndex};
 
 pub struct IndexStorage {
@@ -33,6 +36,62 @@ impl IndexStorage {
         Ok(())
     }
 
+    /// Path of the ANN graph sidecar. Sits beside the index inside the git dir
+    /// so deleting the repository takes both.
+    pub fn ann_path(&self) -> PathBuf {
+        let mut path = self.index_path.clone();
+        let name = path
+            .file_name()
+            .map(|n| format!("{}.hnsw", n.to_string_lossy()))
+            .unwrap_or_else(|| "semantic-index.hnsw".to_string());
+        path.set_file_name(name);
+        path
+    }
+
+    /// Load the cached graph, rebuilding it when absent, stale, or unreadable.
+    ///
+    /// Returns the graph and whether it had to be rebuilt, so callers can
+    /// mention the one-off cost. Failing to *write* the cache is swallowed: a
+    /// read-only git dir should slow searches down, not break them.
+    pub fn load_or_build_ann(
+        &self,
+        index: &SemanticIndex,
+        params: HnswParams,
+    ) -> (HnswIndex, bool) {
+        if let Some(sidecar) = self.read_ann_sidecar()
+            && sidecar.matches(index)
+        {
+            return (sidecar.into_graph(), false);
+        }
+
+        let graph = build_graph(index, params);
+        let sidecar = AnnSidecar::new(index, graph.clone());
+        if let Err(err) = self.write_ann_sidecar(&sidecar) {
+            tracing::debug!("could not cache ANN graph: {err}");
+        }
+
+        (graph, true)
+    }
+
+    /// Build and persist the graph unconditionally. Called after indexing so the
+    /// first search does not pay for construction.
+    pub fn refresh_ann(&self, index: &SemanticIndex, params: HnswParams) -> Result<(), IndexError> {
+        let sidecar = AnnSidecar::new(index, build_graph(index, params));
+        self.write_ann_sidecar(&sidecar)
+    }
+
+    /// A missing, truncated, or format-mismatched sidecar is a cache miss.
+    fn read_ann_sidecar(&self) -> Option<AnnSidecar> {
+        let bytes = fs::read(self.ann_path()).ok()?;
+        bincode::deserialize(&bytes).ok()
+    }
+
+    fn write_ann_sidecar(&self, sidecar: &AnnSidecar) -> Result<(), IndexError> {
+        let encoded = bincode::serialize(sidecar)?;
+        fs::write(self.ann_path(), encoded)?;
+        Ok(())
+    }
+
     pub fn load(&self) -> Result<SemanticIndex, IndexError> {
         let data = fs::read(&self.index_path).map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -58,6 +117,29 @@ mod tests {
     use crate::git::CommitInfo;
     use crate::index::{IndexEntry, SemanticIndex};
     use tempfile::TempDir;
+
+    fn index_with(count: usize) -> SemanticIndex {
+        let mut index =
+            SemanticIndex::new("bge-small-en-v1.5".to_string(), "head".to_string(), true);
+        for i in 0..count {
+            index.entries.push(IndexEntry {
+                commit: CommitInfo {
+                    hash: format!("hash{i:04}"),
+                    author: "Alice".to_string(),
+                    date: chrono::DateTime::parse_from_rfc3339("2024-06-15T12:00:00Z")
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    message: format!("commit {i}"),
+                    diff_summary: String::new(),
+                },
+                embedding: (0..32)
+                    .map(|d| ((i * 32 + d) as f32 * 0.017).sin())
+                    .collect(),
+            });
+        }
+        index.metadata.total_commits = count;
+        index
+    }
 
     fn create_git_repo() -> TempDir {
         let dir = TempDir::new().unwrap();
@@ -163,5 +245,71 @@ mod tests {
             index_file.exists(),
             "index should be stored in .git/semantic-index"
         );
+    }
+
+    #[test]
+    fn test_ann_path_sits_beside_the_index() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        assert_eq!(
+            storage.ann_path(),
+            dir.path().join(".git").join("semantic-index.hnsw")
+        );
+    }
+
+    #[test]
+    fn test_load_or_build_ann_builds_then_caches() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(40);
+
+        let (graph, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
+        assert!(rebuilt, "first call has nothing to load");
+        assert_eq!(graph.len(), 40);
+        assert!(
+            storage.ann_path().exists(),
+            "graph should be cached to disk"
+        );
+
+        let (cached, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
+        assert!(!rebuilt, "second call should hit the cache");
+        assert_eq!(cached.len(), 40);
+    }
+
+    #[test]
+    fn test_load_or_build_ann_rebuilds_when_index_grows() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+
+        storage.load_or_build_ann(&index_with(10), HnswParams::default());
+
+        let (graph, rebuilt) = storage.load_or_build_ann(&index_with(15), HnswParams::default());
+        assert!(rebuilt, "a changed index must invalidate the sidecar");
+        assert_eq!(graph.len(), 15);
+    }
+
+    #[test]
+    fn test_load_or_build_ann_survives_corrupt_sidecar() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(20);
+
+        fs::write(storage.ann_path(), b"not a bincode payload at all").unwrap();
+
+        let (graph, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
+        assert!(rebuilt, "corrupt cache is a miss, not an error");
+        assert_eq!(graph.len(), 20);
+    }
+
+    #[test]
+    fn test_refresh_ann_writes_a_usable_sidecar() {
+        let dir = create_git_repo();
+        let storage = IndexStorage::new(dir.path()).unwrap();
+        let index = index_with(25);
+
+        storage.refresh_ann(&index, HnswParams::default()).unwrap();
+
+        let (_, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
+        assert!(!rebuilt, "refresh should leave a cache the loader accepts");
     }
 }

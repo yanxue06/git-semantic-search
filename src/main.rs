@@ -71,6 +71,14 @@ enum Commands {
         #[arg(long)]
         file: Option<String>,
 
+        /// Score every commit instead of using the approximate graph
+        #[arg(long)]
+        exact: bool,
+
+        /// Graph candidate-list width — higher is slower and more accurate
+        #[arg(long, value_name = "N")]
+        ef: Option<usize>,
+
         /// Repository path (defaults to current directory)
         #[arg(long)]
         path: Option<String>,
@@ -121,6 +129,8 @@ fn main() {
             after,
             before,
             file,
+            exact,
+            ef,
             path,
         } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
@@ -130,7 +140,7 @@ fn main() {
                 before,
                 file,
             };
-            cli::commands::search(&repo_path, &query, results, filters)
+            cli::commands::search(&repo_path, &query, results, filters, exact, ef)
         }
         Commands::Stats { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
