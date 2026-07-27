@@ -4,14 +4,15 @@ use std::path::Path;
 use std::time::Instant;
 use tracing::info;
 
+use super::output::JsonOutput;
 use crate::embedding::ModelManager;
 use crate::git::{GitError, RepositoryParser};
 use crate::index::{EXACT_SCAN_THRESHOLD, IndexBuilder, IndexError, IndexStorage, SemanticIndex};
-use crate::search::{RetrievalMode, SearchEngine, SearchOptions, SearchStrategy};
+use crate::search::{SearchEngine, SearchOptions, SearchStrategy};
 use crate::text::Bm25Params;
 use crate::vector::HnswParams;
 
-use super::SearchFilters;
+use super::SearchRequest;
 
 pub fn init(force: bool) -> Result<()> {
     println!("🚀 Initializing git-semantic...\n");
@@ -220,15 +221,19 @@ pub fn update(repo_path: &str) -> Result<()> {
     index(repo_path, true, false)
 }
 
-pub fn search(
-    repo_path: &str,
-    query: &str,
-    num_results: usize,
-    filters: SearchFilters,
-    exact: bool,
-    ef: Option<usize>,
-    mode: RetrievalMode,
-) -> Result<()> {
+pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
+    let SearchRequest {
+        query,
+        num_results,
+        filters,
+        exact,
+        ef,
+        mode,
+        diversity,
+        json,
+    } = request;
+    let query = query.as_str();
+
     let path = Path::new(repo_path);
 
     let storage = IndexStorage::new(path)?;
@@ -239,7 +244,7 @@ pub fn search(
     let lexical = if mode.uses_lexical() && !index.entries.is_empty() {
         let build_started = Instant::now();
         let (lexical, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
-        if rebuilt {
+        if rebuilt && !json {
             println!(
                 "🔧 Built keyword index for {} commits in {:.1}s (cached for next time)\n",
                 lexical.len(),
@@ -258,7 +263,7 @@ pub fn search(
     } else {
         let build_started = Instant::now();
         let (graph, rebuilt) = storage.load_or_build_ann(&index, HnswParams::default());
-        if rebuilt {
+        if rebuilt && !json {
             println!(
                 "🔧 Built search graph for {} commits in {:.1}s (cached for next time)\n",
                 graph.len(),
@@ -283,9 +288,21 @@ pub fn search(
             exact,
             ef,
             mode,
+            diversity,
         },
     )?;
     let elapsed = started.elapsed();
+
+    if json {
+        let document = JsonOutput::new(
+            query,
+            &outcome,
+            outcome.diversified,
+            elapsed.as_secs_f64() * 1000.0,
+        );
+        println!("{}", serde_json::to_string_pretty(&document)?);
+        return Ok(());
+    }
 
     if outcome.results.is_empty() {
         println!("No results found for: \"{}\"", query);
@@ -335,11 +352,17 @@ pub fn search(
         SearchStrategy::Approximate => "graph search",
         SearchStrategy::ApproximateThenExact => "graph search, verified exhaustively",
     };
+    let diversified = if outcome.diversified {
+        ", diversified"
+    } else {
+        ""
+    };
     println!(
-        "Searched {} commits via {} {} in {:.0}ms",
+        "Searched {} commits via {} {}{} in {:.0}ms",
         outcome.candidate_count,
         outcome.mode.as_str(),
         how,
+        diversified,
         elapsed.as_secs_f64() * 1000.0
     );
 

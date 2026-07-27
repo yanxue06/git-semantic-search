@@ -2,10 +2,12 @@ mod engine;
 mod error;
 mod filter;
 mod fusion;
+mod mmr;
 
 pub use engine::{RetrievalMode, SearchEngine, SearchOptions, SearchOutcome, SearchStrategy};
 pub use error::SearchError;
 pub use fusion::{RRF_K, Ranking, reciprocal_rank_fusion};
+pub use mmr::{Candidate, DEFAULT_LAMBDA, rerank};
 
 use crate::git::CommitInfo;
 use serde::{Deserialize, Serialize};
