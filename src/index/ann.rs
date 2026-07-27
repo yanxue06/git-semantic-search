@@ -101,7 +101,33 @@ fn fingerprint(index: &SemanticIndex) -> u64 {
         feed(last.commit.hash.as_bytes());
     }
 
+    // Sample the embeddings themselves. Re-embedding the same commits — because
+    // the text fed to the model changed, not the history — leaves count, HEAD,
+    // and hashes identical, so nothing above would notice. Three fixed probes
+    // keep this O(1) while catching that case.
+    for position in sample_positions(index.entries.len()) {
+        let embedding = &index.entries[position].embedding;
+        feed(&(embedding.len() as u64).to_le_bytes());
+        for value in embedding.iter().take(EMBEDDING_PROBE_FLOATS) {
+            feed(&value.to_bits().to_le_bytes());
+        }
+    }
+
     hash
+}
+
+/// How many leading floats of a probed embedding to fold in.
+const EMBEDDING_PROBE_FLOATS: usize = 8;
+
+/// First, middle, and last entry — deduplicated for tiny indexes.
+fn sample_positions(len: usize) -> Vec<usize> {
+    if len == 0 {
+        return Vec::new();
+    }
+
+    let mut positions = vec![0, len / 2, len - 1];
+    positions.dedup();
+    positions
 }
 
 #[cfg(test)]
@@ -222,5 +248,32 @@ mod tests {
     fn fingerprint_is_stable_across_calls() {
         let index = sample(&["a1", "b2"]);
         assert_eq!(fingerprint(&index), fingerprint(&index));
+    }
+
+    #[test]
+    fn sidecar_detects_reembedding_at_identical_history() {
+        let index = sample(&["a1", "b2", "c3"]);
+        let sidecar = AnnSidecar::new(&index, build_graph(&index, HnswParams::default()));
+
+        // Same commits, same HEAD, same count — only the vectors changed, as
+        // happens when the text fed to the model changes.
+        let mut reembedded = sample(&["a1", "b2", "c3"]);
+        for entry in &mut reembedded.entries {
+            entry.embedding.iter_mut().for_each(|v| *v = -*v);
+        }
+
+        assert!(
+            !sidecar.matches(&reembedded),
+            "re-embedded vectors must invalidate the cached graph"
+        );
+    }
+
+    #[test]
+    fn sample_positions_dedupes_for_tiny_indexes() {
+        assert!(sample_positions(0).is_empty());
+        assert_eq!(sample_positions(1), vec![0]);
+        assert_eq!(sample_positions(2), vec![0, 1]);
+        assert_eq!(sample_positions(3), vec![0, 1, 2]);
+        assert_eq!(sample_positions(100), vec![0, 50, 99]);
     }
 }
