@@ -104,6 +104,18 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = Mode::Hybrid)]
         mode: Mode,
 
+        /// Spread results across distinct changes instead of near-duplicates
+        #[arg(long)]
+        diverse: bool,
+
+        /// Diversity balance: 1.0 is pure relevance, 0.0 pure novelty
+        #[arg(long, value_name = "L", default_value_t = git_semantic::search::DEFAULT_LAMBDA)]
+        lambda: f32,
+
+        /// Emit machine-readable JSON instead of formatted text
+        #[arg(long)]
+        json: bool,
+
         /// Repository path (defaults to current directory)
         #[arg(long)]
         path: Option<String>,
@@ -157,6 +169,9 @@ fn main() {
             exact,
             ef,
             mode,
+            diverse,
+            lambda,
+            json,
             path,
         } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
@@ -166,7 +181,19 @@ fn main() {
                 before,
                 file,
             };
-            cli::commands::search(&repo_path, &query, results, filters, exact, ef, mode.into())
+            cli::commands::search(
+                &repo_path,
+                cli::SearchRequest {
+                    query,
+                    num_results: results,
+                    filters,
+                    exact,
+                    ef,
+                    mode: mode.into(),
+                    diversity: diverse.then_some(lambda),
+                    json,
+                },
+            )
         }
         Commands::Stats { path } => {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
