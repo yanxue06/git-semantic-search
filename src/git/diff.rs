@@ -1,6 +1,14 @@
 use git2::{Commit, Diff, DiffOptions, Repository};
+use std::collections::BTreeSet;
 
 use super::GitError;
+
+/// Total diff text kept per commit, in bytes.
+const MAX_DIFF_SIZE: usize = 10_000;
+
+/// Share of the budget reserved for the changed-file list, so a commit that
+/// touches hundreds of files still leaves room for actual diff content.
+const MAX_PATH_SECTION: usize = 2_000;
 
 pub struct DiffExtractor;
 
@@ -16,20 +24,60 @@ impl DiffExtractor {
         let diff =
             repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))?;
 
-        let summary = Self::format_diff(&diff)?;
+        let paths = Self::changed_paths(&diff)?;
+        let body = Self::format_diff(&diff)?;
 
-        const MAX_DIFF_SIZE: usize = 10_000;
-        if summary.len() > MAX_DIFF_SIZE {
-            let truncate_at = summary
-                .char_indices()
-                .take_while(|(i, _)| *i < MAX_DIFF_SIZE)
-                .last()
-                .map(|(i, c)| i + c.len_utf8())
-                .unwrap_or(MAX_DIFF_SIZE); // Find valid UTF-8 boundary to handle multi-byte chars (e.g. emojis)
-            Ok(summary[..truncate_at].to_string() + "\n... (truncated)")
-        } else {
-            Ok(summary)
+        let mut summary = String::with_capacity(paths.len() + body.len() + 1);
+        summary.push_str(&paths);
+        if !paths.is_empty() && !body.is_empty() {
+            summary.push('\n');
         }
+        summary.push_str(&body);
+
+        Ok(truncate_on_char_boundary(summary, MAX_DIFF_SIZE))
+    }
+
+    /// A `Files:` line naming every path the commit touched.
+    ///
+    /// libgit2 reports paths in the file-header line class, which
+    /// [`Self::format_diff`] deliberately drops — it keeps only `+`/`-` content.
+    /// So paths never reached the stored summary, which is what `--file`
+    /// searches. Collecting them from the deltas directly puts them back.
+    ///
+    /// Both sides of a rename are recorded, so either name finds the commit.
+    fn changed_paths(diff: &Diff) -> Result<String, GitError> {
+        let mut paths: BTreeSet<String> = BTreeSet::new();
+
+        diff.foreach(
+            &mut |delta, _progress| {
+                for file in [delta.old_file(), delta.new_file()] {
+                    if let Some(path) = file.path().and_then(|p| p.to_str()) {
+                        paths.insert(path.to_string());
+                    }
+                }
+                true
+            },
+            None,
+            None,
+            None,
+        )?;
+
+        if paths.is_empty() {
+            return Ok(String::new());
+        }
+
+        let mut line = String::from("Files: ");
+        for (i, path) in paths.iter().enumerate() {
+            let separator = if i == 0 { "" } else { ", " };
+            if line.len() + separator.len() + path.len() > MAX_PATH_SECTION {
+                line.push_str(", ...");
+                break;
+            }
+            line.push_str(separator);
+            line.push_str(path);
+        }
+
+        Ok(line)
     }
 
     fn format_diff(diff: &Diff) -> Result<String, GitError> {
@@ -52,20 +100,43 @@ impl DiffExtractor {
     }
 }
 
+/// Truncate to at most `limit` bytes without splitting a UTF-8 character.
+fn truncate_on_char_boundary(text: String, limit: usize) -> String {
+    if text.len() <= limit {
+        return text;
+    }
+
+    // Find valid UTF-8 boundary to handle multi-byte chars (e.g. emojis)
+    let truncate_at = text
+        .char_indices()
+        .take_while(|(i, _)| *i < limit)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(limit);
+
+    text[..truncate_at].to_string() + "\n... (truncated)"
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_truncate_at_utf8_char_boundary() {
-        const MAX_SIZE: usize = 10;
-        let s = "1234567890🔍abc"; // emoji at byte 10-13
+        let s = "1234567890🔍abc".to_string(); // emoji at byte 10-13
+        let out = truncate_on_char_boundary(s, 10);
+        assert_eq!(out, "1234567890\n... (truncated)");
+    }
 
-        let truncate_at = s
-            .char_indices()
-            .take_while(|(i, _)| *i < MAX_SIZE)
-            .last()
-            .map(|(i, c)| i + c.len_utf8())
-            .unwrap_or(MAX_SIZE);
+    #[test]
+    fn test_truncate_leaves_short_text_alone() {
+        let s = "short".to_string();
+        assert_eq!(truncate_on_char_boundary(s.clone(), 100), s);
+    }
 
-        assert_eq!(&s[..truncate_at], "1234567890"); // Includes chars starting before limit, excludes emoji
+    #[test]
+    fn test_truncate_at_exact_limit_is_untouched() {
+        let s = "1234567890".to_string();
+        assert_eq!(truncate_on_char_boundary(s.clone(), 10), s);
     }
 }

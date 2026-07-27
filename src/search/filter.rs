@@ -70,8 +70,11 @@ impl FilterEngine {
             return false;
         }
 
+        // Matches against the commit's recorded path list, not the raw diff
+        // text, so `--file src/auth.rs` no longer depends on that string
+        // happening to appear inside an added or removed line.
         if let Some(file) = &self.file
-            && !commit.diff_summary.contains(file)
+            && !commit.touches_path(file)
         {
             return false;
         }
@@ -228,8 +231,12 @@ mod tests {
     #[test]
     fn test_file_filter() {
         let commits = [
-            commit("Alice", "2024-06-01", "+modified src/auth.rs\n-old line"),
-            commit("Bob", "2024-07-01", "+modified src/main.rs"),
+            commit(
+                "Alice",
+                "2024-06-01",
+                "Files: src/auth.rs\n+let token = ...;",
+            ),
+            commit("Bob", "2024-07-01", "Files: src/main.rs\n+fn main() {}"),
         ];
         let engine = FilterEngine::new(SearchFilters {
             file: Some("src/auth.rs".to_string()),
@@ -240,11 +247,68 @@ mod tests {
     }
 
     #[test]
+    fn test_file_filter_matches_one_of_several_changed_paths() {
+        let commits = [commit(
+            "Alice",
+            "2024-06-01",
+            "Files: Cargo.toml, src/auth.rs, src/main.rs\n+something",
+        )];
+        for needle in ["Cargo.toml", "src/auth.rs", "src/main.rs", "src/"] {
+            let engine = FilterEngine::new(SearchFilters {
+                file: Some(needle.to_string()),
+                ..no_filters()
+            })
+            .unwrap();
+            assert_eq!(
+                surviving(&engine, &commits).len(),
+                1,
+                "{needle} should match"
+            );
+        }
+    }
+
+    #[test]
+    fn test_file_filter_ignores_paths_mentioned_only_in_diff_content() {
+        // The commit edits main.rs and merely *mentions* auth.rs in a removed
+        // line. Substring-searching the whole diff would wrongly match.
+        let commits = [commit(
+            "Alice",
+            "2024-06-01",
+            "Files: src/main.rs\n-use crate::src/auth.rs::Token;",
+        )];
+        let engine = FilterEngine::new(SearchFilters {
+            file: Some("src/auth.rs".to_string()),
+            ..no_filters()
+        })
+        .unwrap();
+        assert!(
+            surviving(&engine, &commits).is_empty(),
+            "a path only referenced in diff text is not a changed file"
+        );
+    }
+
+    #[test]
+    fn test_file_filter_falls_back_on_a_legacy_index() {
+        // No `Files:` line — an index built before paths were recorded.
+        let commits = [commit("Alice", "2024-06-01", "+modified src/auth.rs")];
+        let engine = FilterEngine::new(SearchFilters {
+            file: Some("src/auth.rs".to_string()),
+            ..no_filters()
+        })
+        .unwrap();
+        assert_eq!(
+            surviving(&engine, &commits).len(),
+            1,
+            "legacy indexes should keep the old substring behaviour"
+        );
+    }
+
+    #[test]
     fn test_combined_filters() {
         let commits = [
-            commit("Alice", "2024-06-01", "+src/auth.rs"),
-            commit("Alice", "2024-01-01", "+src/auth.rs"),
-            commit("Bob", "2024-06-01", "+src/auth.rs"),
+            commit("Alice", "2024-06-01", "Files: src/auth.rs"),
+            commit("Alice", "2024-01-01", "Files: src/auth.rs"),
+            commit("Bob", "2024-06-01", "Files: src/auth.rs"),
         ];
         let engine = FilterEngine::new(SearchFilters {
             author: Some("alice".to_string()),
