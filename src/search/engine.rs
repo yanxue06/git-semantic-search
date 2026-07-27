@@ -9,6 +9,7 @@ use crate::vector::scoring::{Scored, TopK, dot, normalize};
 
 use super::filter::FilterEngine;
 use super::fusion::{Ranking, reciprocal_rank_fusion};
+use super::mmr::{Candidate, rerank};
 use super::{SearchError, SearchResult};
 
 /// Which retrievers contribute to the ranking.
@@ -76,6 +77,8 @@ pub struct SearchOptions {
     pub ef: Option<usize>,
     /// Which retrievers to consult.
     pub mode: RetrievalMode,
+    /// Rerank for diversity with MMR at this lambda. `None` disables it.
+    pub diversity: Option<f32>,
 }
 
 impl SearchOptions {
@@ -86,6 +89,7 @@ impl SearchOptions {
             exact: false,
             ef: None,
             mode: RetrievalMode::default(),
+            diversity: None,
         }
     }
 }
@@ -99,6 +103,8 @@ pub struct SearchOutcome {
     pub candidate_count: usize,
     /// Which retrievers actually ran.
     pub mode: RetrievalMode,
+    /// Whether MMR reordered the results.
+    pub diversified: bool,
 }
 
 /// When a filtered graph search returns fewer than `k` hits, widen `ef` by this
@@ -136,6 +142,7 @@ impl SearchEngine {
             exact,
             ef,
             mode,
+            diversity,
         } = options;
 
         // Compile filters before embedding so a malformed date fails in
@@ -161,8 +168,9 @@ impl SearchEngine {
         let mode = self.resolve_mode(mode, usable_lexical.is_some());
 
         // Fusion can only rerank what it is handed, so each retriever goes
-        // deeper than `k` when both are running.
-        let depth = if mode == RetrievalMode::Hybrid {
+        // deeper than `k` when both are running. MMR needs a deep pool for the
+        // same reason — it can only diversify across candidates it was given.
+        let depth = if mode == RetrievalMode::Hybrid || diversity.is_some() {
             (k * FUSION_DEPTH_MULTIPLIER).max(MIN_FUSION_DEPTH)
         } else {
             k
@@ -214,7 +222,17 @@ impl SearchEngine {
             _ => Vec::new(),
         };
 
-        let ranked = self.rank(mode, &semantic_hits, &lexical_hits, k);
+        // Rank deep, then diversify down to `k`, so MMR chooses from the whole
+        // pool rather than from an already-truncated top-k.
+        let ranked = self.rank(mode, &semantic_hits, &lexical_hits, depth);
+
+        let (ranked, diversified) = match diversity {
+            Some(lambda) => (
+                self.diversify(index, &ranked, &semantic_hits, k, lambda),
+                true,
+            ),
+            None => (ranked.into_iter().take(k).collect::<Vec<u32>>(), false),
+        };
 
         // Similarity is only meaningful when embeddings produced the ordering.
         // For fused or lexical rankings, report the semantic similarity when the
@@ -243,7 +261,44 @@ impl SearchEngine {
             strategy,
             candidate_count,
             mode,
+            diversified,
         })
+    }
+
+    /// Rerank for diversity using the stored embeddings as the similarity space.
+    ///
+    /// Relevance comes from the semantic ranking when available; for a
+    /// lexical-only ranking, position in the fused list stands in, which is
+    /// monotonic and all MMR needs.
+    fn diversify(
+        &self,
+        index: &SemanticIndex,
+        ranked: &[u32],
+        semantic: &[Scored],
+        k: usize,
+        lambda: f32,
+    ) -> Vec<u32> {
+        let candidates: Vec<Candidate<'_>> = ranked
+            .iter()
+            .enumerate()
+            .filter_map(|(position, &id)| {
+                let entry = index.entries.get(id as usize)?;
+                let relevance = semantic
+                    .iter()
+                    .find(|hit| hit.id == id)
+                    .map(|hit| 1.0 - hit.dist)
+                    // Fall back to rank position, descending.
+                    .unwrap_or(1.0 - (position as f32 / ranked.len().max(1) as f32));
+
+                Some(Candidate {
+                    id,
+                    relevance,
+                    embedding: &entry.embedding,
+                })
+            })
+            .collect();
+
+        rerank(&candidates, k, lambda)
     }
 
     /// Downgrade hybrid to semantic when no usable BM25 index is available.
