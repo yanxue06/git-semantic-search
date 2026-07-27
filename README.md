@@ -89,8 +89,10 @@ git-semantic search "refactor" --author=alice
 # By date
 git-semantic search "bug fix" --after=2024-01-01
 
-# By file
+# By file — matches the commit's changed paths
 git-semantic search "optimization" --file=src/auth.rs
+git-semantic search "dependency bump" --file=Cargo.toml
+git-semantic search "refactor" --file=src/index/      # prefix works too
 
 # Manually decide number of matches with the -n flag 
 git-semantic search "feature" -n 5
