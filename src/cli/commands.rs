@@ -14,36 +14,73 @@ use crate::vector::HnswParams;
 
 use super::SearchRequest;
 
+/// Where indexing progress is written.
+///
+/// `index` is the user asking for indexing, so it reports on stdout. `search`
+/// can now trigger the same work on its own, and that run might be emitting
+/// `--json` — a progress line in the middle of a JSON document is not
+/// parseable, so bootstrap chatter goes to stderr instead.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Progress {
+    Stdout,
+    Stderr,
+}
+
+impl Progress {
+    fn say(self, line: &str) {
+        match self {
+            Self::Stdout => println!("{line}"),
+            Self::Stderr => eprintln!("{line}"),
+        }
+    }
+}
+
 pub fn init(force: bool) -> Result<()> {
     println!("🚀 Initializing git-semantic...\n");
 
     let model_manager = ModelManager::new()?;
 
     if force || !model_manager.is_model_downloaded() {
-        println!("📥 Downloading embedding model (bge-small-en-v1.5, ~130MB)...");
-        println!("This is a one-time setup and may take a few minutes.\n");
-
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.green} {msg}")
-                .unwrap(),
-        );
-        pb.set_message("Downloading model...");
-
-        model_manager.download_model()?;
-
-        pb.finish_with_message("✅ Model downloaded successfully!");
+        download_model(&model_manager, Progress::Stdout)?;
     } else {
         println!("✅ Model already downloaded");
     }
 
     println!("\n🎉 git-semantic is ready to use!");
-    println!("\nNext steps:");
-    println!("  1. Navigate to a git repository");
-    println!("  2. Run: git-semantic index");
-    println!("  3. Run: git-semantic search \"your query\"");
+    println!("\nJust search — the index builds itself on first use:");
+    println!("  git-semantic search \"your query\"");
 
+    Ok(())
+}
+
+/// A model manager with the model on disk, downloading it if this is the first
+/// run on this machine.
+///
+/// `init` used to be the only thing that could download, which made it a
+/// mandatory step rather than an optional warm-up.
+fn ensure_model(progress: Progress) -> Result<ModelManager> {
+    let manager = ModelManager::new()?;
+    if !manager.is_model_downloaded() {
+        download_model(&manager, progress)?;
+    }
+    Ok(manager)
+}
+
+fn download_model(manager: &ModelManager, progress: Progress) -> Result<()> {
+    progress.say("📥 Downloading embedding model (bge-small-en-v1.5, ~130MB)...");
+    progress.say("This is a one-time setup and may take a few minutes.\n");
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    pb.set_message("Downloading model...");
+
+    manager.download_model()?;
+
+    pb.finish_with_message("✅ Model downloaded successfully!");
     Ok(())
 }
 
@@ -71,7 +108,8 @@ pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
                         existing.entries.len()
                     );
                 }
-                return full_index(path, &storage, include_diffs);
+                full_index(path, &storage, include_diffs, Progress::Stdout)?;
+                return Ok(());
             }
 
             if existing_mode != include_diffs {
@@ -99,28 +137,33 @@ pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
             incremental_index(path, &storage, existing, include_diffs)?;
         }
         None => {
-            full_index(path, &storage, include_diffs)?;
+            full_index(path, &storage, include_diffs, Progress::Stdout)?;
         }
     }
 
     Ok(())
 }
 
-fn full_index(path: &Path, storage: &IndexStorage, include_diffs: bool) -> Result<()> {
+fn full_index(
+    path: &Path,
+    storage: &IndexStorage,
+    include_diffs: bool,
+    progress: Progress,
+) -> Result<SemanticIndex> {
     let mode = if include_diffs { "full" } else { "quick" };
-    println!(
+    progress.say(&format!(
         "📚 Indexing repository ({} mode): {}\n",
         mode,
         path.display()
-    );
+    ));
 
     info!("Parsing git repository...");
     let parser = RepositoryParser::new(path)?;
     let commits = parser.parse_commits(include_diffs)?;
 
-    println!("Found {} commits to index\n", commits.len());
+    progress.say(&format!("Found {} commits to index\n", commits.len()));
 
-    let model_manager = ModelManager::new()?;
+    let model_manager = ensure_model(progress)?;
     let mut builder = IndexBuilder::new(model_manager, include_diffs)?;
 
     // Commits are in newest-first order from revwalk; track HEAD as last_commit
@@ -137,14 +180,14 @@ fn full_index(path: &Path, storage: &IndexStorage, include_diffs: bool) -> Resul
 
     pb.finish_with_message("✅ Commits indexed");
 
-    println!("\n💾 Saving index...");
+    progress.say("\n💾 Saving index...");
     let index = builder.build();
     storage.save(&index)?;
 
-    print_index_stats(&index, storage)?;
-    refresh_search_graph(&index, storage);
+    print_index_stats(&index, storage, progress)?;
+    refresh_search_graph(&index, storage, progress);
 
-    Ok(())
+    Ok(index)
 }
 
 fn incremental_index(
@@ -163,7 +206,8 @@ fn incremental_index(
                 &existing.last_commit[..7.min(existing.last_commit.len())]
             );
             println!("Re-indexing from scratch...\n");
-            return full_index(path, storage, include_diffs);
+            full_index(path, storage, include_diffs, Progress::Stdout)?;
+            return Ok(());
         }
         Err(err) => {
             return Err(err.into());
@@ -186,7 +230,7 @@ fn incremental_index(
         new_commits.len()
     );
 
-    let model_manager = ModelManager::new()?;
+    let model_manager = ensure_model(Progress::Stdout)?;
     let mut builder = IndexBuilder::from_existing(existing, model_manager)?;
 
     // New commits are newest-first; update last_commit to the newest
@@ -207,8 +251,8 @@ fn incremental_index(
     let index = builder.build();
     storage.save(&index)?;
 
-    print_index_stats(&index, storage)?;
-    refresh_search_graph(&index, storage);
+    print_index_stats(&index, storage, Progress::Stdout)?;
+    refresh_search_graph(&index, storage, Progress::Stdout);
 
     Ok(())
 }
@@ -237,7 +281,13 @@ pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
     let path = Path::new(repo_path);
 
     let storage = IndexStorage::new(path)?;
-    let index = storage.load()?;
+    let index = match storage.load() {
+        Ok(index) => index,
+        // Nothing indexed yet. Everything needed to fix that is already known,
+        // so do it rather than send the user off to run a different command.
+        Err(IndexError::IndexNotFound) => bootstrap(path, &storage)?,
+        Err(err) => return Err(err.into()),
+    };
 
     // BM25 is cheap to build and independent of repository size, so it is
     // loaded whenever lexical retrieval is in play.
@@ -369,6 +419,24 @@ pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
     Ok(())
 }
 
+/// Index a repository the first time it is searched.
+///
+/// Onboarding used to be three commands, and the first one a new user ran was
+/// the wrong one — `search` answered with an error telling them to run `index`,
+/// which answered with an error telling them to run `init`. Nothing about that
+/// sequence needed a human: the model location is fixed and the index mode has
+/// a default. So `search` does it.
+///
+/// Full mode, matching `git-semantic index`. Quick mode is faster but its index
+/// is not a superset, so bootstrapping into it would quietly commit the user to
+/// the weaker option and a full re-embed to leave it.
+fn bootstrap(path: &Path, storage: &IndexStorage) -> Result<SemanticIndex> {
+    eprintln!("No index for this repository yet — building one (one-time).");
+    eprintln!("For a faster, message-only index instead: git-semantic index --quick\n");
+
+    full_index(path, storage, true, Progress::Stderr)
+}
+
 pub fn stats(repo_path: &str) -> Result<()> {
     let path = Path::new(repo_path);
 
@@ -430,20 +498,27 @@ fn make_progress_bar(total: u64) -> ProgressBar {
     pb
 }
 
-fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()> {
-    println!("✅ Index saved successfully!");
-    println!("\n📊 Index statistics:");
-    println!("  - Total commits: {}", index.entries.len());
-    println!(
+fn print_index_stats(
+    index: &SemanticIndex,
+    storage: &IndexStorage,
+    progress: Progress,
+) -> Result<()> {
+    progress.say("✅ Index saved successfully!");
+    progress.say("\n📊 Index statistics:");
+    progress.say(&format!("  - Total commits: {}", index.entries.len()));
+    progress.say(&format!(
         "  - Mode: {}",
         if index.metadata.include_diffs {
             "full (with diffs)"
         } else {
             "quick (messages only)"
         }
-    );
-    println!("  - Model: {}", index.model_version);
-    println!("  - Index size: ~{:.2} MB", storage.index_size_mb()?);
+    ));
+    progress.say(&format!("  - Model: {}", index.model_version));
+    progress.say(&format!(
+        "  - Index size: ~{:.2} MB",
+        storage.index_size_mb()?
+    ));
     Ok(())
 }
 
@@ -452,7 +527,7 @@ fn print_index_stats(index: &SemanticIndex, storage: &IndexStorage) -> Result<()
 /// Skipped for small repositories, which never consult the graph. A failure here
 /// is reported, not propagated — the index itself saved fine and search falls
 /// back to an exhaustive scan.
-fn refresh_search_graph(index: &SemanticIndex, storage: &IndexStorage) {
+fn refresh_search_graph(index: &SemanticIndex, storage: &IndexStorage, progress: Progress) {
     if !index.entries.is_empty()
         && let Err(err) = storage.refresh_lexical(index, Bm25Params::default())
     {
@@ -464,15 +539,18 @@ fn refresh_search_graph(index: &SemanticIndex, storage: &IndexStorage) {
     }
 
     let started = Instant::now();
-    println!(
+    progress.say(&format!(
         "\n🔧 Building search graph for {} commits...",
         index.entries.len()
-    );
+    ));
 
     match storage.refresh_ann(index, HnswParams::default()) {
-        Ok(()) => println!("  done in {:.1}s", started.elapsed().as_secs_f64()),
+        Ok(()) => progress.say(&format!(
+            "  done in {:.1}s",
+            started.elapsed().as_secs_f64()
+        )),
         Err(err) => {
-            println!("  skipped ({err})");
+            progress.say(&format!("  skipped ({err})"));
             info!("ANN graph will be rebuilt on first search");
         }
     }
