@@ -145,7 +145,26 @@ enum Commands {
     },
 }
 
+/// Let a closed pipe kill the process the way every other Unix tool dies.
+///
+/// Rust ignores `SIGPIPE` at startup, so `… | head -5` turns a write into an
+/// `EPIPE`, and `println!` panics on it — the user asks for five results and
+/// gets a Rust backtrace. Restoring the default disposition makes the process
+/// exit quietly instead, which matters most for the two outputs people
+/// actually pipe: `--json` and `completions`.
+#[cfg(unix)]
+fn die_quietly_on_closed_pipe() {
+    // SAFETY: runs before any other thread exists, and only resets a signal
+    // disposition to the operating system's default.
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
+}
+
+#[cfg(not(unix))]
+fn die_quietly_on_closed_pipe() {}
+
 fn main() {
+    die_quietly_on_closed_pipe();
+
     // Initialize tracing — only show logs when RUST_LOG is explicitly set
     tracing_subscriber::fmt()
         .with_env_filter(
