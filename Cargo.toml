@@ -1,7 +1,9 @@
 [package]
 name = "git-semantic"
 version = "1.4.0"
-edition = "2024" 
+edition = "2024"
+# Let-chains, which the index and search paths use throughout.
+rust-version = "1.88"
 authors = ["Yan Xue"]
 description = "Semantic search for git history using natural language"
 license = "MIT"
