@@ -145,6 +145,24 @@ enum Commands {
     },
 }
 
+/// Diagnostics on stderr, silent unless `RUST_LOG` asks for them.
+///
+/// Two separate things used to send log records to stdout on every run.
+/// `add_directive(INFO)` made INFO the floor rather than a fallback, so the
+/// filter was on whether or not `RUST_LOG` was set; and `fmt()` writes to
+/// stdout by default. Together they put several hundred lines of ONNX Runtime
+/// session log in front of every result — and inside `--json`, which made the
+/// document unparseable.
+fn init_logging() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 /// Let a closed pipe kill the process the way every other Unix tool dies.
 ///
 /// Rust ignores `SIGPIPE` at startup, so `… | head -5` turns a write into an
@@ -165,13 +183,7 @@ fn die_quietly_on_closed_pipe() {}
 fn main() {
     die_quietly_on_closed_pipe();
 
-    // Initialize tracing — only show logs when RUST_LOG is explicitly set
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
-        )
-        .init();
+    init_logging();
 
     let cli = Cli::parse();
 
