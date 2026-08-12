@@ -1,6 +1,6 @@
 [package]
 name = "git-semantic"
-version = "1.4.0"
+version = "1.5.0"
 edition = "2024"
 # Let-chains, which the index and search paths use throughout.
 rust-version = "1.88"
