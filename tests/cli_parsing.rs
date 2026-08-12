@@ -102,3 +102,59 @@ fn test_init_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--force"));
 }
+
+#[test]
+fn test_completions_emit_a_script_per_shell() {
+    // Each shell gets a marker only its own format contains, so a silently
+    // wrong generator would not pass by emitting the same script five times.
+    for (shell, marker) in [
+        ("zsh", "#compdef git-semantic"),
+        ("bash", "complete -F _git__semantic"),
+        ("fish", "complete -c git-semantic"),
+        ("elvish", "edit:completion:arg-completer"),
+        ("powershell", "Register-ArgumentCompleter"),
+    ] {
+        let output = git_semantic_bin()
+            .args(["completions", shell])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{shell} completions should succeed"
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains(marker),
+            "{shell} script should contain {marker}, got: {}",
+            &stdout[..stdout.len().min(200)]
+        );
+    }
+}
+
+#[test]
+fn test_completions_cover_every_subcommand() {
+    let output = git_semantic_bin()
+        .args(["completions", "zsh"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for subcommand in ["init", "index", "update", "search", "stats", "completions"] {
+        assert!(
+            stdout.contains(subcommand),
+            "completion script should know about `{subcommand}`"
+        );
+    }
+}
+
+#[test]
+fn test_completions_rejects_an_unknown_shell() {
+    let output = git_semantic_bin()
+        .args(["completions", "tcsh"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("bash"), "should list the shells it knows");
+}

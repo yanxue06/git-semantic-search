@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 use git_semantic::{cli, embedding, git, index, search};
 use std::process;
 
@@ -127,6 +128,21 @@ enum Commands {
         #[arg(short, long)]
         path: Option<String>,
     },
+
+    /// Print a shell completion script to stdout
+    ///
+    /// Source it from your shell config, or drop it somewhere on the
+    /// completion path:
+    ///
+    ///   bash    git-semantic completions bash > /etc/bash_completion.d/git-semantic
+    ///   zsh     git-semantic completions zsh > ~/.zfunc/_git-semantic
+    ///   fish    git-semantic completions fish > ~/.config/fish/completions/git-semantic.fish
+    #[command(verbatim_doc_comment)]
+    Completions {
+        /// Shell to generate the script for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 fn main() {
@@ -199,12 +215,28 @@ fn main() {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
             cli::commands::stats(&repo_path)
         }
+        Commands::Completions { shell } => {
+            print_completions(shell);
+            Ok(())
+        }
     };
 
     if let Err(err) = result {
         print_error(&err);
         process::exit(1);
     }
+}
+
+/// Write a completion script for `shell` to stdout.
+///
+/// Generated from the same [`Cli`] definition the parser uses, so the flags a
+/// shell offers cannot drift from the flags that exist. Named for the binary
+/// (`git-semantic`) rather than the git alias — `git semantic …` completes
+/// through git's own subcommand machinery.
+fn print_completions(shell: Shell) {
+    let mut cmd = Cli::command();
+    let name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, name, &mut std::io::stdout());
 }
 
 /// Format and print errors in a user-friendly way, with hints when available.
