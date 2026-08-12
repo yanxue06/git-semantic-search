@@ -4,25 +4,36 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/yanxue06/git-semantic-search/total?style=flat-square&label=binary%20downloads)](https://github.com/yanxue06/git-semantic-search/releases)
 [![Crates.io Downloads](https://img.shields.io/crates/d/git-semantic?style=flat-square&label=cargo%20installs)](https://crates.io/crates/git-semantic)
 [![Crates.io](https://img.shields.io/crates/v/git-semantic?style=flat-square)](https://crates.io/crates/git-semantic)
-[![License](https://img.shields.io/github/license/yanxue06/git-semantic-search?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/github/license/yanxue06/git-semantic-search?style=flat-square)](https://github.com/yanxue06/git-semantic-search/blob/main/LICENSE)
 
 **Search your git history using natural language - find commits by what they mean, not just what they say.**
 
-```bash
-$ git-semantic search "fixed race condition in authentication"
+Both of these run against a fresh clone of [ripgrep](https://github.com/BurntSushi/ripgrep), 2,287 commits:
 
-🎯 Most Relevant Commits:
+```console
+$ git log --grep="large files"
+139f186 crates/ignore: switch to depth first traversal
+714ae82 Add `--max-filesize` option to cli
+d06f84c Get rid of special mmap decision on Windows.
 
-1. abc1234 - Resolved concurrent login session handling (0.89 similarity)
-   Author: Alice Chen, 6 months ago
-   
-2. def5678 - Synchronized user token refresh logic (0.84 similarity)
-   Author: Bob Martinez, 4 months ago
+$ git-semantic search "searching very large files without loading them into memory"
+🎯 Most Relevant Commits for: "searching very large files without loading them into memory"
+
+1. ca058d7 - Add support for memory maps. (0.75 similarity)
+   Author: Andrew Gallant, 2016-09-07 01:47:33 UTC
+
+2. 139f186 - crates/ignore: switch to depth first traversal (0.70 similarity)
+   Author: Andrew Gallant, 2020-04-18 15:33:03 UTC
+
+3. 6b2efd4 - If a file is empty, still try to search it. (0.72 similarity)
+   Author: Andrew Gallant, 2016-09-25 00:45:06 UTC
+
+Searched 2287 commits via hybrid graph search in 3ms
 ```
 
-Stop scrolling through hundreds of commits with `git log --grep`. Just describe what you're looking for in plain English.
+The commit that answers the question is called *Add support for memory maps*. `--grep` never surfaces it — you can only grep for "memory maps" once you already know that's the answer.
 
-Example: 
+Example:
 
 https://github.com/user-attachments/assets/91d33745-24ac-47ef-8a82-7ad6510eb17d
 
@@ -44,10 +55,11 @@ git log -S "mutex"        # Maybe? 🤷
 - 🎯 **Hybrid retrieval** - meaning *and* exact tokens: `CVE-2024-1234`, `src/auth.rs`, a commit hash
 - 🧩 **Diverse results** - `--diverse` stops ten near-identical dependency bumps from filling the page
 - 🤖 **Scriptable** - `--json` for piping into `jq`, a script, or an LLM
-- 🚀 **Fast** - Sub-millisecond retrieval, even on 50k-commit histories (HNSW graph index)
+- 🚀 **Fast** - Millisecond searches that stay flat as history grows (HNSW graph index)
 - 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
-- 📦 **Zero config** - Works out of the box
+- 📦 **Zero config** - One command. The model downloads and the index builds on first search
 - 🎯 **Smart filtering** - By author, date, file, and more
+- 🐚 **Shell completions** - bash, zsh, fish, elvish, powershell
 
 ## Installation
 
@@ -59,19 +71,40 @@ cargo install git-semantic
 
 Alternatively, you can also install from the latest release compatible with your OS on the [releases page](https://github.com/yanxue06/git-semantic-search/releases). 
 
+Because the binary is named `git-semantic`, git picks it up as a subcommand for free:
+
+```bash
+git semantic search "the commit that broke the build"
+```
+
+### Shell completions
+
+```bash
+git-semantic completions zsh  > ~/.zfunc/_git-semantic
+git-semantic completions bash > /etc/bash_completion.d/git-semantic
+git-semantic completions fish > ~/.config/fish/completions/git-semantic.fish
+```
+
 ## Quick Start
 
 ```bash
-# 1. One-time setup (downloads AI model, ~130MB)
-git-semantic init
-
-# 2. Index your repository
 cd /path/to/your/repo
-git-semantic index
-
-# 3. Search!
 git-semantic search "your query here"
 ```
+
+That's it. The first search in a repository downloads the embedding model
+(~130MB, once per machine) and indexes the history, saying so as it goes.
+Every search after that answers in about 100ms.
+
+To do that work ahead of time instead — on a new machine, or before a demo:
+
+```bash
+git-semantic init     # download the model
+git-semantic index    # build the index (also picks up new commits incrementally)
+```
+
+Any directory inside the repository works, not just the root. Worktrees get
+their own index; submodules index into their own git dir.
 
 ## Usage
 
@@ -89,8 +122,9 @@ git-semantic search "refactor payment logic"
 # By author
 git-semantic search "refactor" --author=alice
 
-# By date
+# By date — either bound, or both, inclusive
 git-semantic search "bug fix" --after=2024-01-01
+git-semantic search "bug fix" --after=2024-01-01 --before=2024-06-30
 
 # By file — matches the commit's changed paths
 git-semantic search "optimization" --file=src/auth.rs
@@ -145,24 +179,25 @@ git-semantic search "race condition" --json | jq -r '.results[].hash'
 git-semantic search "auth" --json | jq '.results[] | {subject, files}'
 ```
 
+Actual output, again from ripgrep's history:
+
 ```json
 {
-  "query": "race condition",
+  "query": "memory maps",
   "mode": "hybrid",
   "strategy": "approximate",
-  "candidates": 48213,
+  "candidates": 2287,
   "diversified": false,
-  "took_ms": 1.4,
+  "took_ms": 1.802042,
   "results": [
     {
       "rank": 1,
-      "hash": "abc1234def5678901234567890123456789012ab",
-      "author": "Alice Chen",
-      "date": "2024-06-15T12:00:00+00:00",
-      "subject": "fix: resolve race condition in auth",
-      "message": "fix: resolve race condition in auth\n\nUse a mutex...",
-      "files": ["src/auth.rs"],
-      "similarity": 0.83
+      "hash": "5a9883d27c018256c45e450764cf711fe53ce0f3",
+      "author": "Andrew Gallant",
+      "date": "2016-09-22T00:47:40+00:00",
+      "subject": "Try to use memory maps more aggressively on Windows.",
+      "message": "Try to use memory maps more aggressively on Windows.\n\nSome brief playing around suggests that it is faster.",
+      "similarity": 0.76922643
     }
   ]
 }
@@ -170,7 +205,8 @@ git-semantic search "auth" --json | jq '.results[] | {subject, files}'
 
 Full 40-character hashes, RFC 3339 dates, and `similarity` omitted entirely on
 keyword-only hits — JSON cannot represent NaN, so the field is absent rather
-than null.
+than null. Progress and diagnostics go to stderr, so stdout is always a single
+parseable document, even on the run that builds the index.
 
 ### Tuning search
 
@@ -194,17 +230,20 @@ Searched 48213 commits via graph search in 1ms
 ### Index Management
 
 ```bash
-# Update index with new commits
-git-semantic update
+# Build, or pick up new commits incrementally
+git-semantic index
 
-# Show index statistics
-git-semantic stats
-
-# Quick index (messages only, faster)
+# Quick index (messages only, ~5x faster to build)
 git-semantic index --quick
 
-# Full index (messages + diffs, more context)
+# Full index (messages + diffs, more context) — the default
 git-semantic index --full
+
+# Rebuild from scratch, e.g. to switch modes
+git-semantic index --force
+
+# What's indexed, how big, and which search strategy it will use
+git-semantic stats
 ```
 
 ## How It Works
@@ -218,7 +257,7 @@ git-semantic index --full
 
 **Stored locations:**
 - Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS)
-- Index: `.git/semantic-index` (per repository)
+- Index: `.git/semantic-index` (per repository, inside the git dir, so it is never committed)
 - Search graph: `.git/semantic-index.hnsw` (rebuilt automatically when stale)
 - Keyword index: `.git/semantic-index.bm25` (same)
 
@@ -250,7 +289,27 @@ skipped. Graph latency is near-flat in repository size; the scan is linear.
 Building the graph costs ~0.5s per 1k commits, once, and is cached — a rounding
 error next to embedding the same commits through ONNX.
 
-## Real Example
+### End to end
+
+The table above times retrieval in isolation. What a query actually costs,
+measured on a fresh clone of [ripgrep](https://github.com/BurntSushi/ripgrep) at
+2,287 commits on an Apple M5 Pro:
+
+| | `--quick` | `--full` |
+|---|---|---|
+| One-time index build | 16 s | 83 s |
+| Index on disk | 4.1 MB | 7.8 MB |
+| Graph build | 0.4 s | 0.4 s |
+
+A search is **100 ms wall clock**. The few milliseconds the CLI reports are
+embedding the query plus retrieval; the rest is process start and loading the
+ONNX model. The microbenchmark above isolates retrieval alone, which is why its
+numbers are two orders of magnitude smaller.
+
+## Full-mode output
+
+A full index embeds diffs as well as messages, and results carry a couple of
+lines of diff context with them:
 
 ```bash
 $ git-semantic search "ONNX integration"
@@ -285,9 +344,9 @@ docs: update installation instructions
 
 ## Requirements
 
-- Git repository (obviously!)
+- A git repository — any directory inside it, including worktrees and submodules
 - ~130MB disk space for the AI model
-- Rust 1.70+ (if building from source)
+- Rust 1.88+ (if building from source) — declared as `rust-version`, so cargo checks it for you
 
 ## License
 
