@@ -158,3 +158,63 @@ fn test_completions_rejects_an_unknown_shell() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("bash"), "should list the shells it knows");
 }
+
+/// A repository with no commits fails before any model work, which keeps these
+/// tests offline while still getting a tracing record emitted.
+fn empty_repo() -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().unwrap();
+    git2::Repository::init(dir.path()).unwrap();
+    dir
+}
+
+#[test]
+fn test_log_records_never_land_on_stdout() {
+    let dir = empty_repo();
+    let output = git_semantic_bin()
+        .args(["index", "--path", dir.path().to_str().unwrap()])
+        .env("RUST_LOG", "info")
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("Parsing git repository"),
+        "log records belong on stderr; stdout was: {stdout}"
+    );
+}
+
+#[test]
+fn test_logging_is_off_unless_rust_log_asks_for_it() {
+    let dir = empty_repo();
+    let output = git_semantic_bin()
+        .args(["index", "--path", dir.path().to_str().unwrap()])
+        .env_remove("RUST_LOG")
+        .output()
+        .unwrap();
+
+    let both = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !both.contains("Parsing git repository"),
+        "a default run should print no log records, got: {both}"
+    );
+}
+
+#[test]
+fn test_rust_log_still_turns_logging_on() {
+    let dir = empty_repo();
+    let output = git_semantic_bin()
+        .args(["index", "--path", dir.path().to_str().unwrap()])
+        .env("RUST_LOG", "info")
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Parsing git repository"),
+        "RUST_LOG=info should still produce logs, stderr was: {stderr}"
+    );
+}
