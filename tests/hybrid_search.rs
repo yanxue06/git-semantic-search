@@ -21,7 +21,7 @@ const DIM: usize = 64;
 
 fn git_repo() -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::create_dir_all(dir.path().join(".git")).unwrap();
+    git2::Repository::init(dir.path()).unwrap();
     dir
 }
 
@@ -137,7 +137,7 @@ fn bm25_index_is_cached_beside_the_semantic_index() {
     assert!(rebuilt);
     assert_eq!(lexical.len(), index.entries.len());
 
-    let sidecar = dir.path().join(".git").join("semantic-index.bm25");
+    let sidecar = storage.lexical_path();
     assert!(sidecar.exists(), "BM25 index should be cached to disk");
 
     let (_, rebuilt) = storage.load_or_build_lexical(&index, Bm25Params::default());
