@@ -16,7 +16,7 @@ const DIM: usize = 96;
 
 fn git_repo() -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::create_dir_all(dir.path().join(".git")).unwrap();
+    git2::Repository::init(dir.path()).unwrap();
     dir
 }
 
@@ -172,8 +172,8 @@ fn sidecar_lives_beside_the_index_and_never_replaces_it() {
     storage.save(&index).unwrap();
     storage.refresh_ann(&index, HnswParams::default()).unwrap();
 
-    let index_file = dir.path().join(".git").join("semantic-index");
-    let sidecar = dir.path().join(".git").join("semantic-index.hnsw");
+    let index_file = storage.index_path().to_path_buf();
+    let sidecar = storage.ann_path();
     assert!(index_file.exists(), "primary index must remain");
     assert!(sidecar.exists(), "sidecar must be written alongside it");
 

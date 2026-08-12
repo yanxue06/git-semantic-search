@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use git2::Repository;
+
 use crate::text::{Bm25Index, Bm25Params};
 use crate::vector::{HnswIndex, HnswParams};
 
@@ -13,29 +15,41 @@ pub struct IndexStorage {
 }
 
 impl IndexStorage {
+    /// Locate the index inside the repository's real git directory.
+    ///
+    /// `repo_path` may be the repository root or any directory beneath it. The
+    /// git dir is discovered by walking up the way `git` itself does, which is
+    /// already how [`RepositoryParser`](crate::git::RepositoryParser) finds
+    /// commits — so both halves of the tool agree on which repository is being
+    /// operated on, and the index lands in the same file regardless of the
+    /// directory the command was run from.
+    ///
+    /// Discovery also resolves the `gitdir:` indirection used by linked
+    /// worktrees and submodules. Submodules write that pointer as a *relative*
+    /// path (`gitdir: ../.git/modules/<name>`), which only means anything
+    /// relative to the submodule directory; reading the file by hand resolves
+    /// it against the process's working directory instead and puts the index
+    /// somewhere else entirely.
     pub fn new(repo_path: &Path) -> Result<Self, IndexError> {
-        let git_dir = repo_path.join(".git");
+        let git_dir = Repository::discover(repo_path)
+            .map_err(|_| discovery_failure(repo_path))?
+            .path()
+            .to_path_buf();
 
-        let index_path = if git_dir.is_dir() {
-            git_dir.join("semantic-index")
-        } else if git_dir.is_file() {
-            let content = fs::read_to_string(&git_dir)?;
-            let git_dir_path = content
-                .strip_prefix("gitdir: ")
-                .and_then(|s| s.trim().split('\n').next())
-                .ok_or(IndexError::InvalidGitFile)?;
-            PathBuf::from(git_dir_path).join("semantic-index")
-        } else {
-            return Err(IndexError::NotAGitRepository);
-        };
-
-        Ok(Self { index_path })
+        Ok(Self {
+            index_path: git_dir.join("semantic-index"),
+        })
     }
 
     pub fn save(&self, index: &SemanticIndex) -> Result<(), IndexError> {
         let encoded = bincode::serialize(index)?;
         fs::write(&self.index_path, encoded)?;
         Ok(())
+    }
+
+    /// Where the index for this repository lives, once discovery has resolved it.
+    pub fn index_path(&self) -> &Path {
+        &self.index_path
     }
 
     /// Path of the ANN graph sidecar. Sits beside the index inside the git dir
@@ -167,6 +181,17 @@ impl IndexStorage {
     }
 }
 
+/// Tell "you are not in a repository" apart from "this repository's pointer is
+/// broken". Both stop the command, but only one of them is the user's fault,
+/// and the hints they carry say different things.
+fn discovery_failure(repo_path: &Path) -> IndexError {
+    if repo_path.join(".git").exists() {
+        IndexError::InvalidGitFile
+    } else {
+        IndexError::NotAGitRepository
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,10 +223,21 @@ mod tests {
         index
     }
 
+    /// A real repository, not a bare `.git` directory — discovery reads it.
     fn create_git_repo() -> TempDir {
         let dir = TempDir::new().unwrap();
-        fs::create_dir_all(dir.path().join(".git")).unwrap();
+        Repository::init(dir.path()).unwrap();
         dir
+    }
+
+    /// The git dir as discovery resolves it. On macOS a `TempDir` sits under a
+    /// symlinked `/var`, so a path built by hand from `dir.path()` will not
+    /// compare equal to the resolved one.
+    fn git_dir(dir: &TempDir) -> PathBuf {
+        Repository::discover(dir.path())
+            .unwrap()
+            .path()
+            .to_path_buf()
     }
 
     fn sample_index() -> SemanticIndex {
@@ -235,6 +271,83 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let storage = IndexStorage::new(dir.path());
         assert!(storage.is_err());
+    }
+
+    #[test]
+    fn test_a_subdirectory_resolves_to_the_same_index_as_the_root() {
+        // The common case: you are somewhere inside the tree, not sitting on
+        // the root. Every command has to find the same index anyway.
+        let dir = create_git_repo();
+        let nested = dir.path().join("src").join("deeply").join("nested");
+        fs::create_dir_all(&nested).unwrap();
+
+        let from_root = IndexStorage::new(dir.path()).unwrap();
+        let from_nested = IndexStorage::new(&nested).unwrap();
+
+        assert_eq!(from_root.index_path(), from_nested.index_path());
+    }
+
+    #[test]
+    fn test_a_subdirectory_reads_back_what_the_root_wrote() {
+        let dir = create_git_repo();
+        let nested = dir.path().join("crates").join("inner");
+        fs::create_dir_all(&nested).unwrap();
+
+        IndexStorage::new(dir.path())
+            .unwrap()
+            .save(&sample_index())
+            .unwrap();
+
+        let loaded = IndexStorage::new(&nested).unwrap().load().unwrap();
+        assert_eq!(loaded.last_commit, "abc1234");
+    }
+
+    #[test]
+    fn test_a_relative_gitdir_pointer_resolves_against_the_repository() {
+        // What a submodule looks like on disk: the real git dir lives in the
+        // parent, and the submodule's `.git` is a file pointing at it with a
+        // path that is only meaningful relative to the submodule directory.
+        let dir = create_git_repo();
+        let real_git_dir = dir.path().join("modules").join("sub");
+        fs::create_dir_all(dir.path().join("modules")).unwrap();
+        fs::rename(dir.path().join(".git"), &real_git_dir).unwrap();
+
+        let submodule = dir.path().join("sub");
+        fs::create_dir_all(&submodule).unwrap();
+        fs::write(submodule.join(".git"), "gitdir: ../modules/sub\n").unwrap();
+
+        let storage = IndexStorage::new(&submodule).unwrap();
+
+        // Resolving `../modules/sub` against the process's working directory
+        // instead of the submodule lands the index outside the repository
+        // entirely, so pin it to the git dir the pointer actually names.
+        assert!(
+            storage
+                .index_path()
+                .starts_with(fs::canonicalize(&real_git_dir).unwrap()),
+            "index belongs in the resolved git dir, got {}",
+            storage.index_path().display()
+        );
+        storage.save(&sample_index()).unwrap();
+        assert_eq!(
+            IndexStorage::new(&submodule)
+                .unwrap()
+                .load()
+                .unwrap()
+                .last_commit,
+            "abc1234"
+        );
+    }
+
+    #[test]
+    fn test_a_broken_gitdir_pointer_is_not_reported_as_a_missing_repository() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join(".git"), "gitdir: ./nowhere\n").unwrap();
+
+        assert!(matches!(
+            IndexStorage::new(dir.path()),
+            Err(IndexError::InvalidGitFile)
+        ));
     }
 
     #[test]
@@ -310,7 +423,7 @@ mod tests {
         let storage = IndexStorage::new(dir.path()).unwrap();
         assert_eq!(
             storage.ann_path(),
-            dir.path().join(".git").join("semantic-index.hnsw")
+            git_dir(&dir).join("semantic-index.hnsw")
         );
     }
 
@@ -364,7 +477,7 @@ mod tests {
         let storage = IndexStorage::new(dir.path()).unwrap();
         assert_eq!(
             storage.lexical_path(),
-            dir.path().join(".git").join("semantic-index.bm25")
+            git_dir(&dir).join("semantic-index.bm25")
         );
     }
 
