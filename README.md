@@ -1,3 +1,5 @@
+
+
 # git-semantic
 
 [![Release](https://img.shields.io/github/v/release/yanxue06/git-semantic-search?style=flat-square)](https://github.com/yanxue06/git-semantic-search/releases)
@@ -224,7 +226,7 @@ git-semantic search "race condition" --ef 256
 Every search prints how it ran, so the tradeoff is never invisible:
 
 ```
-Searched 48213 commits via graph search in 1ms
+Searched 48213 commits via hybrid graph search in 1ms
 ```
 
 ### Index Management
