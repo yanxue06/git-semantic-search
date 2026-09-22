@@ -14,7 +14,7 @@ const LANES: usize = 8;
 
 /// Dot product of two equal-length slices.
 ///
-/// `chunks_exact` hands LLVM fixed-size slices, so indexing inside the block is
+/// `as_chunks` hands LLVM fixed-size arrays, so indexing inside the block is
 /// provably in bounds and the whole block lowers to packed multiply-adds across
 /// `LANES` independent accumulators — no bounds checks, no serial dependency
 /// chain on a single register. The remainder is summed scalar.
@@ -28,10 +28,10 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
     let (a, b) = (&a[..len], &b[..len]);
 
     let mut acc = [0.0f32; LANES];
-    let mut blocks_a = a.chunks_exact(LANES);
-    let mut blocks_b = b.chunks_exact(LANES);
+    let (blocks_a, rest_a) = a.as_chunks::<LANES>();
+    let (blocks_b, rest_b) = b.as_chunks::<LANES>();
 
-    for (x, y) in blocks_a.by_ref().zip(blocks_b.by_ref()) {
+    for (x, y) in blocks_a.iter().zip(blocks_b) {
         for lane in 0..LANES {
             acc[lane] += x[lane] * y[lane];
         }
@@ -42,7 +42,7 @@ pub fn dot(a: &[f32], b: &[f32]) -> f32 {
         sum += value;
     }
 
-    for (x, y) in blocks_a.remainder().iter().zip(blocks_b.remainder()) {
+    for (x, y) in rest_a.iter().zip(rest_b) {
         sum += x * y;
     }
 
