@@ -1,0 +1,50 @@
+.github/workflows/release.yaml
+  s_584aa62855e0b0::t_f624b5a58bc747 27-30
+src/main.rs
+  s_584aa62855e0b0::t_d8eb6e24ebc517 325-326
+  s_584aa62855e0b0::t_b383ee5f83f1a5 7,154-156,184-186
+README.md
+  s_584aa62855e0b0::t_9d2a6f5c58e827 75-76,79-80,83-87
+  s_584aa62855e0b0::t_c507c9676f56db 88
+Cargo.toml
+  s_584aa62855e0b0::t_40428426665823 22,25-29
+  s_584aa62855e0b0::t_bcbeb0ba336a36 30
+src/bin/git-semantic.rs
+  s_584aa62855e0b0::t_9cbbbe6df01d45 1-56
+src/cli/commands.rs
+  s_584aa62855e0b0::t_8d26d61241b48d 63,290,468,473,503,529,550
+src/cli/mod.rs
+  s_584aa62855e0b0::t_47ea52992242aa 28
+src/embedding/error.rs
+  s_584aa62855e0b0::t_5fdfa31615a769 8,64,78,81,101
+src/embedding/model.rs
+  s_584aa62855e0b0::t_51b723f91c55b9 42,298
+src/embedding/spec.rs
+  s_584aa62855e0b0::t_feca47fc9155b9 3,65,134,142,246
+src/git/error.rs
+  s_584aa62855e0b0::t_d98ff449c97eeb 29
+src/index/error.rs
+  s_584aa62855e0b0::t_a59c68668e0714 11,43,45,52,56
+src/search/error.rs
+  s_584aa62855e0b0::t_20b5914fc05e91 26
+tests/cli_parsing.rs
+  s_584aa62855e0b0::t_a98e5c65a0fe7f 3-4,9,12,17,25,37,47,53,59,67,73,79,90-92,96,113,134,154,170,190,202-249
+tests/custom_models.rs
+  s_584aa62855e0b0::t_ebbd674af71bba 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d9c3493796a9f09ec70080476a86921c1d70c33",
+  "prompts": {},
+  "sessions": {
+    "s_584aa62855e0b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9294f1d7-7408-4055-8d69-28054cba1ab1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Yan Xue <y9xue@uwaterloo.ca>"
+    }
+  }
+}
