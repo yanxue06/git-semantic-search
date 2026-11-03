@@ -1,0 +1,4 @@
+{
+  "max_position_embeddings": 128,
+  "hidden_size": 24
+}

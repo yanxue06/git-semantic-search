@@ -33,6 +33,24 @@ impl From<Mode> for cli::RetrievalMode {
     }
 }
 
+/// CLI surface for [`cli::Pooling`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum PoolingArg {
+    /// Use the first token's vector (BGE, Arctic, mxbai)
+    Cls,
+    /// Average all token vectors (MiniLM, mpnet, nomic, e5, gte)
+    Mean,
+}
+
+impl From<PoolingArg> for cli::Pooling {
+    fn from(pooling: PoolingArg) -> Self {
+        match pooling {
+            PoolingArg::Cls => Self::Cls,
+            PoolingArg::Mean => Self::Mean,
+        }
+    }
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize git-semantic (download models and prepare environment)
@@ -127,6 +145,35 @@ enum Commands {
         /// Repository path (defaults to current directory)
         #[arg(short, long)]
         path: Option<String>,
+    },
+
+    /// Show the embedding model, or switch to another one
+    ///
+    /// With no argument, prints the active model. With one, switches to it:
+    ///
+    ///   git-semantic model BAAI/bge-base-en-v1.5   any Hugging Face repo with an ONNX export
+    ///   git-semantic model ./my-model              a directory with model.onnx and tokenizer.json
+    ///   git-semantic model default                 back to bge-small-en-v1.5
+    ///
+    /// Pooling and prompts are read from the model's sentence-transformers
+    /// files when it has them. The flags below cover models that don't.
+    /// Indexes built with another model re-embed on their next search.
+    #[command(verbatim_doc_comment)]
+    Model {
+        /// Hugging Face id, local directory, or `default`
+        model: Option<String>,
+
+        /// How token vectors become one vector, if the model doesn't say
+        #[arg(long, value_enum, requires = "model")]
+        pooling: Option<PoolingArg>,
+
+        /// Text put before each search query, e.g. "search_query: " for nomic
+        #[arg(long, value_name = "TEXT", requires = "model")]
+        query_prefix: Option<String>,
+
+        /// Text put before each commit when indexing, e.g. "search_document: " for nomic
+        #[arg(long, value_name = "TEXT", requires = "model")]
+        document_prefix: Option<String>,
     },
 
     /// Print a shell completion script to stdout
@@ -246,6 +293,19 @@ fn main() {
             let repo_path = path.unwrap_or_else(|| ".".to_string());
             cli::commands::stats(&repo_path)
         }
+        Commands::Model {
+            model,
+            pooling,
+            query_prefix,
+            document_prefix,
+        } => cli::commands::model(
+            model.as_deref(),
+            cli::ModelFlags {
+                pooling: pooling.map(Into::into),
+                query_prefix,
+                document_prefix,
+            },
+        ),
         Commands::Completions { shell } => {
             print_completions(shell);
             Ok(())

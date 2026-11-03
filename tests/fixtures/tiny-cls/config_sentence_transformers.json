@@ -1,0 +1,6 @@
+{
+  "prompts": {
+    "query": "query: ",
+    "document": "passage: "
+  }
+}

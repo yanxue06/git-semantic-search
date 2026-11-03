@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod output;
 
+pub use crate::embedding::Pooling;
 pub use crate::search::RetrievalMode;
 pub use output::{JsonOutput, JsonResult};
 
@@ -22,6 +23,15 @@ pub struct SearchRequest {
     pub diversity: Option<f32>,
     /// Emit JSON instead of formatted text.
     pub json: bool,
+}
+
+/// Settings `git-semantic model` takes for what a model doesn't declare
+/// itself. Each one, when given, wins over what the model's files say.
+#[derive(Debug, Default)]
+pub struct ModelFlags {
+    pub pooling: Option<Pooling>,
+    pub query_prefix: Option<String>,
+    pub document_prefix: Option<String>,
 }
 
 #[derive(Debug)]

@@ -1,11 +1,17 @@
 use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::fs;
 use std::path::Path;
 use std::time::Instant;
 use tracing::info;
 
 use super::output::JsonOutput;
-use crate::embedding::ModelManager;
+use super::{ModelFlags, Pooling};
+use crate::embedding::{
+    DeclaredPooling, EmbeddingError, ModelChoice, ModelManager, ModelSource, ModelSpec,
+    clear_active_model, download_repo, downloaded_models, model_dir, model_files_present,
+    parse_model_choice, read_model_settings, save_active_model,
+};
 use crate::git::{GitError, RepositoryParser};
 use crate::index::{EXACT_SCAN_THRESHOLD, IndexBuilder, IndexError, IndexStorage, SemanticIndex};
 use crate::search::{SearchEngine, SearchOptions, SearchStrategy};
@@ -40,7 +46,13 @@ pub fn init(force: bool) -> Result<()> {
 
     let model_manager = ModelManager::new()?;
 
-    if force || !model_manager.is_model_downloaded() {
+    if let ModelSource::Local(dir) = &model_manager.spec().source {
+        // A local model is used where it sits, so there is nothing to fetch.
+        if !model_manager.is_model_downloaded() {
+            return Err(EmbeddingError::local_model_missing(dir).into());
+        }
+        println!("✅ Using the local model in {}", dir.display());
+    } else if force || !model_manager.is_model_downloaded() {
         download_model(&model_manager, Progress::Stdout)?;
     } else {
         println!("✅ Model already downloaded");
@@ -67,7 +79,10 @@ fn ensure_model(progress: Progress) -> Result<ModelManager> {
 }
 
 fn download_model(manager: &ModelManager, progress: Progress) -> Result<()> {
-    progress.say("📥 Downloading embedding model (bge-small-en-v1.5, ~130MB)...");
+    progress.say(&format!(
+        "📥 Downloading embedding model ({})...",
+        manager.spec().name()
+    ));
     progress.say("This is a one-time setup and may take a few minutes.\n");
 
     let pb = ProgressBar::new_spinner();
@@ -108,6 +123,19 @@ pub fn index(repo_path: &str, include_diffs: bool, force: bool) -> Result<()> {
                         existing.entries.len()
                     );
                 }
+                full_index(path, &storage, include_diffs, Progress::Stdout)?;
+                return Ok(());
+            }
+
+            let active_model = ModelManager::new()?.model_version();
+            if existing.model_version != active_model {
+                println!(
+                    "🔁 This index was built with {}, but the active model is {}.\n\
+                     Re-embedding all {} commits.\n",
+                    existing.model_version,
+                    active_model,
+                    existing.entries.len()
+                );
                 full_index(path, &storage, include_diffs, Progress::Stdout)?;
                 return Ok(());
             }
@@ -289,6 +317,17 @@ pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
         Err(err) => return Err(err.into()),
     };
 
+    // Vectors from different models can't be compared, so an index another
+    // model built is re-embedded before it is searched. Keyword-only search
+    // reads no vectors and skips that.
+    let model_manager = ModelManager::new()?;
+    let active_model = model_manager.model_version();
+    let index = if mode.uses_semantic() && index.model_version != active_model {
+        reembed(path, &storage, &index, &active_model)?
+    } else {
+        index
+    };
+
     // BM25 is cheap to build and independent of repository size, so it is
     // loaded whenever lexical retrieval is in play.
     let lexical = if mode.uses_lexical() && !index.entries.is_empty() {
@@ -323,7 +362,6 @@ pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
         Some(graph)
     };
 
-    let model_manager = ModelManager::new()?;
     let mut engine = SearchEngine::new(model_manager)?;
 
     let started = Instant::now();
@@ -437,6 +475,203 @@ fn bootstrap(path: &Path, storage: &IndexStorage) -> Result<SemanticIndex> {
     full_index(path, storage, true, Progress::Stderr)
 }
 
+/// Rebuild an index that a different model built, keeping its quick or full
+/// mode. Progress goes to stderr for the same reason as [`bootstrap`].
+fn reembed(
+    path: &Path,
+    storage: &IndexStorage,
+    stale: &SemanticIndex,
+    active_model: &str,
+) -> Result<SemanticIndex> {
+    eprintln!(
+        "This index was built with {}, but the active model is {}.",
+        stale.model_version, active_model
+    );
+    eprintln!(
+        "Re-embedding its {} commits with the active model (one-time).\n",
+        stale.entries.len()
+    );
+
+    full_index(
+        path,
+        storage,
+        stale.metadata.include_diffs,
+        Progress::Stderr,
+    )
+}
+
+/// `git-semantic model`: show the active model, or switch to another.
+pub fn model(choice: Option<&str>, flags: ModelFlags) -> Result<()> {
+    match choice {
+        None => show_model(),
+        Some(arg) => switch_model(arg, flags),
+    }
+}
+
+fn show_model() -> Result<()> {
+    let manager = ModelManager::new()?;
+    let spec = manager.spec();
+
+    println!("Active model: {}", display_name(spec));
+    print_model_settings(spec);
+    if manager.is_model_downloaded() {
+        println!("  files: {}", manager.model_dir().display());
+    } else if let ModelSource::Local(dir) = &spec.source {
+        println!("  files: missing from {}", dir.display());
+    } else {
+        println!("  files: not downloaded yet (they download on first use)");
+    }
+
+    let downloaded = downloaded_models()?;
+    if !downloaded.is_empty() {
+        println!("\nDownloaded: {}", downloaded.join(", "));
+    }
+    println!("\nSwitch with: git-semantic model <hugging-face-id | directory | default>");
+    Ok(())
+}
+
+fn switch_model(arg: &str, flags: ModelFlags) -> Result<()> {
+    let spec = resolve_model(arg, flags)?;
+
+    // Saving nothing for the plain default lets a future release change what
+    // the default is without this machine staying pinned to the old one.
+    if spec.is_default() {
+        clear_active_model()?;
+    } else {
+        save_active_model(&spec)?;
+    }
+
+    println!("✅ Active model: {}", display_name(&spec));
+    print_model_settings(&spec);
+    println!("\nIndexes built with another model re-embed the next time you search or index them.");
+    Ok(())
+}
+
+/// Turn the argument to `git-semantic model` into a spec that is known to run.
+fn resolve_model(arg: &str, flags: ModelFlags) -> Result<ModelSpec> {
+    let source = match parse_model_choice(arg)? {
+        ModelChoice::Default => {
+            // Known to work, so nothing is downloaded or checked here. It
+            // downloads on first use, as it always has.
+            let mut spec = ModelSpec::default_model();
+            if let Some(pooling) = flags.pooling {
+                spec.pooling = pooling;
+            }
+            if let Some(prefix) = flags.query_prefix {
+                spec.query_prefix = prefix;
+            }
+            if let Some(prefix) = flags.document_prefix {
+                spec.document_prefix = prefix;
+            }
+            return Ok(spec);
+        }
+        ModelChoice::HuggingFace(repo) => ModelSource::HuggingFace(repo),
+        ModelChoice::Local(dir) => ModelSource::Local(dir),
+    };
+
+    let dir = model_dir(&source)?;
+    if let ModelSource::HuggingFace(repo) = &source
+        && !model_files_present(&dir)
+    {
+        println!("📥 Downloading {repo}...\n");
+        if let Err(err) = download_repo(repo, &dir) {
+            // Nothing usable arrived, so don't leave its folder behind. The
+            // repo id was validated, so this is always one folder in models/.
+            let _ = fs::remove_dir_all(&dir);
+            return Err(err.into());
+        }
+    }
+    if !model_files_present(&dir) {
+        return Err(EmbeddingError::local_model_missing(&dir).into());
+    }
+
+    let name = source.name();
+    let settings = read_model_settings(&dir);
+    let pooling = choose_pooling(flags.pooling, settings.pooling, &name)?;
+
+    let mut spec = ModelSpec {
+        source,
+        pooling,
+        query_prefix: flags.query_prefix.unwrap_or(settings.query_prefix),
+        document_prefix: flags.document_prefix.unwrap_or(settings.document_prefix),
+        max_tokens: settings.max_tokens,
+        dimension: 0,
+    };
+    spec.dimension = check_model_runs(&spec)?;
+    Ok(spec)
+}
+
+/// The `--pooling` flag wins. Otherwise use what the model declares, as long
+/// as it is a kind of pooling this tool can do.
+fn choose_pooling(
+    flag: Option<Pooling>,
+    declared: DeclaredPooling,
+    name: &str,
+) -> Result<Pooling, EmbeddingError> {
+    if let Some(pooling) = flag {
+        return Ok(pooling);
+    }
+
+    match declared {
+        DeclaredPooling::Supported(pooling) => Ok(pooling),
+        DeclaredPooling::Missing => Err(EmbeddingError::UnknownPooling(name.to_string())),
+        DeclaredPooling::Unsupported(mode) => Err(EmbeddingError::UnsupportedModel {
+            model: name.to_string(),
+            reason: format!("it pools with `{mode}`, and only cls and mean are supported"),
+        }),
+    }
+}
+
+/// Load the model and embed one sample, so a model that can't run is turned
+/// away now instead of partway through indexing a repository. Returns the
+/// vector length.
+fn check_model_runs(spec: &ModelSpec) -> Result<usize> {
+    println!("🔎 Checking that {} runs...", spec.name());
+
+    let mut manager = ModelManager::with_spec(spec.clone())?;
+    manager.init()?;
+    let vector = manager.encode_document("fix: handle an empty config file without crashing")?;
+
+    let mut usable = !vector.is_empty();
+    for value in vector.iter() {
+        if !value.is_finite() {
+            usable = false;
+        }
+    }
+    if !usable {
+        return Err(EmbeddingError::UnsupportedModel {
+            model: spec.name(),
+            reason: "it produced an empty or non-finite vector".to_string(),
+        }
+        .into());
+    }
+
+    Ok(vector.len())
+}
+
+fn display_name(spec: &ModelSpec) -> String {
+    if spec.source == ModelSpec::default_model().source {
+        format!("{} (default)", spec.name())
+    } else {
+        spec.name()
+    }
+}
+
+fn print_model_settings(spec: &ModelSpec) {
+    println!(
+        "  {} dimensions, {} pooling, up to {} tokens",
+        spec.dimension,
+        spec.pooling.as_str(),
+        spec.max_tokens
+    );
+    if !spec.query_prefix.is_empty() {
+        println!("  query prefix: {:?}", spec.query_prefix);
+    }
+    if !spec.document_prefix.is_empty() {
+        println!("  document prefix: {:?}", spec.document_prefix);
+    }
+}
+
 pub fn stats(repo_path: &str) -> Result<()> {
     let path = Path::new(repo_path);
 
@@ -447,6 +682,10 @@ pub fn stats(repo_path: &str) -> Result<()> {
     println!("Repository: {}", path.display());
     println!("Total commits indexed: {}", index.entries.len());
     println!("Model version: {}", index.model_version);
+    let active_model = ModelManager::new()?.model_version();
+    if active_model != index.model_version {
+        println!("Active model: {active_model} (the next search re-embeds this index)");
+    }
     println!("Last indexed commit: {}", index.last_commit);
     println!(
         "Index mode: {}",
