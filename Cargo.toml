@@ -19,8 +19,14 @@ name = "git_semantic"
 path = "src/lib.rs"
 
 [[bin]]
-name = "git-semantic"
+name = "git-sem"
 path = "src/main.rs"
+
+# The old name. A small shim that forwards to git-sem, so scripts and
+# `git semantic` keep working.
+[[bin]]
+name = "git-semantic"
+path = "src/bin/git-semantic.rs"
 
 [dependencies]
 # Git operations

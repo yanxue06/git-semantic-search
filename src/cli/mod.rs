@@ -25,7 +25,7 @@ pub struct SearchRequest {
     pub json: bool,
 }
 
-/// Settings `git-semantic model` takes for what a model doesn't declare
+/// Settings `git sem model` takes for what a model doesn't declare
 /// itself. Each one, when given, wins over what the model's files say.
 #[derive(Debug, Default)]
 pub struct ModelFlags {

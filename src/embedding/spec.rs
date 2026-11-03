@@ -1,6 +1,6 @@
 //! Which embedding model is active, and what running it takes.
 //!
-//! BGE-small is the default. `git-semantic model <id>` swaps in any compatible
+//! BGE-small is the default. `git sem model <id>` swaps in any compatible
 //! model: a Hugging Face repo or a local directory holding an ONNX encoder and
 //! a `tokenizer.json`. Whatever the model's own settings files declare
 //! (pooling, prompts, context length) is read from them; flags cover the rest.
@@ -62,7 +62,7 @@ pub enum ModelSource {
 }
 
 impl ModelSource {
-    /// What `git-semantic model` prints and accepts for this model.
+    /// What `git sem model` prints and accepts for this model.
     pub fn name(&self) -> String {
         match self {
             Self::HuggingFace(repo) => {
@@ -131,7 +131,7 @@ impl ModelSpec {
     }
 }
 
-/// What the user asked `git-semantic model` to switch to.
+/// What the user asked `git sem model` to switch to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelChoice {
     Default,
@@ -139,7 +139,7 @@ pub enum ModelChoice {
     Local(PathBuf),
 }
 
-/// Read the argument to `git-semantic model`.
+/// Read the argument to `git sem model`.
 ///
 /// An existing directory wins over a Hugging Face id, so a local path that
 /// happens to contain one slash still means the directory.
@@ -243,7 +243,7 @@ pub fn downloaded_models() -> Result<Vec<String>, EmbeddingError> {
     Ok(names)
 }
 
-/// The model `git-semantic model` last chose, or the default.
+/// The model `git sem model` last chose, or the default.
 pub fn load_active_model() -> Result<ModelSpec, EmbeddingError> {
     let path = active_model_file()?;
     let text = match fs::read_to_string(&path) {

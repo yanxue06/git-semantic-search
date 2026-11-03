@@ -4,7 +4,7 @@ use git_semantic::{cli, embedding, git, index, search};
 use std::process;
 
 #[derive(Parser)]
-#[command(name = "git-semantic")]
+#[command(name = "git-sem")]
 #[command(about = "Semantic search for git history", long_about = None)]
 #[command(version)]
 struct Cli {
@@ -151,9 +151,9 @@ enum Commands {
     ///
     /// With no argument, prints the active model. With one, switches to it:
     ///
-    ///   git-semantic model BAAI/bge-base-en-v1.5   any Hugging Face repo with an ONNX export
-    ///   git-semantic model ./my-model              a directory with model.onnx and tokenizer.json
-    ///   git-semantic model default                 back to bge-small-en-v1.5
+    ///   git sem model BAAI/bge-base-en-v1.5   any Hugging Face repo with an ONNX export
+    ///   git sem model ./my-model              a directory with model.onnx and tokenizer.json
+    ///   git sem model default                 back to bge-small-en-v1.5
     ///
     /// Pooling and prompts are read from the model's sentence-transformers
     /// files when it has them. The flags below cover models that don't.
@@ -181,9 +181,9 @@ enum Commands {
     /// Source it from your shell config, or drop it somewhere on the
     /// completion path:
     ///
-    ///   bash    git-semantic completions bash > /etc/bash_completion.d/git-semantic
-    ///   zsh     git-semantic completions zsh > ~/.zfunc/_git-semantic
-    ///   fish    git-semantic completions fish > ~/.config/fish/completions/git-semantic.fish
+    ///   bash    git-sem completions bash > /etc/bash_completion.d/git-sem
+    ///   zsh     git-sem completions zsh > ~/.zfunc/_git-sem
+    ///   fish    git-sem completions fish > ~/.config/fish/completions/git-sem.fish
     #[command(verbatim_doc_comment)]
     Completions {
         /// Shell to generate the script for
@@ -322,8 +322,8 @@ fn main() {
 ///
 /// Generated from the same [`Cli`] definition the parser uses, so the flags a
 /// shell offers cannot drift from the flags that exist. Named for the binary
-/// (`git-semantic`) rather than the git alias — `git semantic …` completes
-/// through git's own subcommand machinery.
+/// (`git-sem`) rather than the git alias — `git sem …` completes through
+/// git's own subcommand machinery.
 fn print_completions(shell: Shell) {
     let mut cmd = Cli::command();
     let name = cmd.get_name().to_string();

@@ -16,7 +16,7 @@ $ git log --grep="large files"
 714ae82 Add `--max-filesize` option to cli
 d06f84c Get rid of special mmap decision on Windows.
 
-$ git-semantic search "searching very large files without loading them into memory"
+$ git sem search "searching very large files without loading them into memory"
 🎯 Most Relevant Commits for: "searching very large files without loading them into memory"
 
 1. ca058d7 - Add support for memory maps. (0.75 similarity)
@@ -72,25 +72,33 @@ cargo install git-semantic
 
 Alternatively, you can also install from the latest release compatible with your OS on the [releases page](https://github.com/yanxue06/git-semantic-search/releases). 
 
-Because the binary is named `git-semantic`, git picks it up as a subcommand for free:
+The crate is `git-semantic`; the binary it installs is `git-sem`, which git also
+runs as a subcommand:
 
 ```bash
-git semantic search "the commit that broke the build"
+git sem search "the commit that broke the build"
+git-sem search "the commit that broke the build"   # same thing
 ```
+
+`git sem --help` makes git look for a man page, and there isn't one. Use
+`git sem -h` or `git-sem --help`.
+
+The old name, `git-semantic`, still works for now: it prints a one-line note and
+hands everything to `git-sem`.
 
 ### Shell completions
 
 ```bash
-git-semantic completions zsh  > ~/.zfunc/_git-semantic
-git-semantic completions bash > /etc/bash_completion.d/git-semantic
-git-semantic completions fish > ~/.config/fish/completions/git-semantic.fish
+git-sem completions zsh  > ~/.zfunc/_git-sem
+git-sem completions bash > /etc/bash_completion.d/git-sem
+git-sem completions fish > ~/.config/fish/completions/git-sem.fish
 ```
 
 ## Quick Start
 
 ```bash
 cd /path/to/your/repo
-git-semantic search "your query here"
+git sem search "your query here"
 ```
 
 That's it. The first search in a repository downloads the embedding model
@@ -100,8 +108,8 @@ Every search after that answers in about 100ms.
 To do that work ahead of time instead — on a new machine, or before a demo:
 
 ```bash
-git-semantic init     # download the model
-git-semantic index    # build the index (also picks up new commits incrementally)
+git sem init     # download the model
+git sem index    # build the index (also picks up new commits incrementally)
 ```
 
 Any directory inside the repository works, not just the root. Worktrees get
@@ -112,28 +120,28 @@ their own index; submodules index into their own git dir.
 ### Basic Search
 
 ```bash
-git-semantic search "fix memory leak"
-git-semantic search "add authentication feature"
-git-semantic search "refactor payment logic"
+git sem search "fix memory leak"
+git sem search "add authentication feature"
+git sem search "refactor payment logic"
 ```
 
 ### Filters
 
 ```bash
 # By author
-git-semantic search "refactor" --author=alice
+git sem search "refactor" --author=alice
 
 # By date — either bound, or both, inclusive
-git-semantic search "bug fix" --after=2024-01-01
-git-semantic search "bug fix" --after=2024-01-01 --before=2024-06-30
+git sem search "bug fix" --after=2024-01-01
+git sem search "bug fix" --after=2024-01-01 --before=2024-06-30
 
 # By file — matches the commit's changed paths
-git-semantic search "optimization" --file=src/auth.rs
-git-semantic search "dependency bump" --file=Cargo.toml
-git-semantic search "refactor" --file=src/index/      # prefix works too
+git sem search "optimization" --file=src/auth.rs
+git sem search "dependency bump" --file=Cargo.toml
+git sem search "refactor" --file=src/index/      # prefix works too
 
 # Manually decide number of matches with the -n flag 
-git-semantic search "feature" -n 5
+git sem search "feature" -n 5
 ```
 
 ### Semantic, keyword, or both
@@ -144,10 +152,10 @@ runs **both** an embedding search and a BM25 keyword search, then fuses the two
 rankings. That is the default; you can pin either side:
 
 ```bash
-git-semantic search "race condition"      # hybrid (default)
-git-semantic search "CVE-2024-1234"       # hybrid — BM25 nails the exact token
-git-semantic search "auth" --mode semantic  # embeddings only (pre-1.5 behaviour)
-git-semantic search "Cargo.toml" --mode lexical  # keywords only
+git sem search "race condition"      # hybrid (default)
+git sem search "CVE-2024-1234"       # hybrid — BM25 nails the exact token
+git sem search "auth" --mode semantic  # embeddings only (pre-1.5 behaviour)
+git sem search "Cargo.toml" --mode lexical  # keywords only
 ```
 
 Fusion uses [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)
@@ -164,8 +172,8 @@ a crate name — technically the ten best answers, practically one answer repeat
 ten times.
 
 ```bash
-git-semantic search "dependency update" --diverse
-git-semantic search "refactor" --diverse --lambda 0.5   # push harder for novelty
+git sem search "dependency update" --diverse
+git sem search "refactor" --diverse --lambda 0.5   # push harder for novelty
 ```
 
 `--diverse` reranks with [Maximal Marginal Relevance](https://dl.acm.org/doi/10.1145/290941.291025),
@@ -176,8 +184,8 @@ default `0.7`. The top result never moves.
 ### Scripting
 
 ```bash
-git-semantic search "race condition" --json | jq -r '.results[].hash'
-git-semantic search "auth" --json | jq '.results[] | {subject, files}'
+git sem search "race condition" --json | jq -r '.results[].hash'
+git sem search "auth" --json | jq '.results[] | {subject, files}'
 ```
 
 Actual output, again from ripgrep's history:
@@ -216,10 +224,10 @@ nearest-neighbor graph. Two escape hatches let you trade speed for accuracy:
 
 ```bash
 # Score every commit — exact, and the baseline the graph is measured against
-git-semantic search "race condition" --exact
+git sem search "race condition" --exact
 
 # Widen the graph's candidate list: slower, higher recall (default 64)
-git-semantic search "race condition" --ef 256
+git sem search "race condition" --ef 256
 ```
 
 Every search prints how it ran, so the tradeoff is never invisible:
@@ -232,19 +240,19 @@ Searched 48213 commits via graph search in 1ms
 
 ```bash
 # Build, or pick up new commits incrementally
-git-semantic index
+git sem index
 
 # Quick index (messages only, ~5x faster to build)
-git-semantic index --quick
+git sem index --quick
 
 # Full index (messages + diffs, more context) — the default
-git-semantic index --full
+git sem index --full
 
 # Rebuild from scratch, e.g. to switch modes
-git-semantic index --force
+git sem index --force
 
 # What's indexed, how big, and which search strategy it will use
-git-semantic stats
+git sem stats
 ```
 
 ### Choosing a model
@@ -253,10 +261,10 @@ BGE-small is the default because it is small and quick. Any embedding model
 with an ONNX export can take its place, from Hugging Face or from disk:
 
 ```bash
-git-semantic model BAAI/bge-base-en-v1.5    # a Hugging Face repo
-git-semantic model ./my-model               # a directory: model.onnx + tokenizer.json
-git-semantic model                          # show the active model
-git-semantic model default                  # back to BGE-small
+git sem model BAAI/bge-base-en-v1.5    # a Hugging Face repo
+git sem model ./my-model               # a directory: model.onnx + tokenizer.json
+git sem model                          # show the active model
+git sem model default                  # back to BGE-small
 ```
 
 Switching downloads the model and embeds a sample sentence before saving the
@@ -264,7 +272,7 @@ choice, so a model that can't run is refused up front and the old one stays.
 
 Each index remembers the model that built it. Vectors from two models can't be
 compared, so the first search after a switch re-embeds that repository once,
-and `git-semantic stats` says when that is pending. Keyword-only search
+and `git sem stats` says when that is pending. Keyword-only search
 (`--mode lexical`) reads no vectors and skips it.
 
 Each of these was switched to, indexed this repository's history, and answered
@@ -287,12 +295,12 @@ files (`1_Pooling/config.json`, `config_sentence_transformers.json`,
 
 ```bash
 # nomic and e5 expect prefixes their repos don't declare
-git-semantic model nomic-ai/nomic-embed-text-v1.5 \
+git sem model nomic-ai/nomic-embed-text-v1.5 \
   --query-prefix "search_query: " --document-prefix "search_document: "
-git-semantic model intfloat/e5-small-v2 --query-prefix "query: " --document-prefix "passage: "
+git sem model intfloat/e5-small-v2 --query-prefix "query: " --document-prefix "passage: "
 
 # this ONNX-only copy of MiniLM ships no pooling settings
-git-semantic model Xenova/all-MiniLM-L6-v2 --pooling mean
+git sem model Xenova/all-MiniLM-L6-v2 --pooling mean
 ```
 
 A model that doesn't say how it pools is refused until `--pooling` is given,
@@ -322,7 +330,7 @@ repos, and exports that keep their weights in a separate `.onnx_data` file.
 
 ## Technical Details
 
-- **Model**: BGE-small-en-v1.5 (BAAI) by default; any BERT-style ONNX encoder via `git-semantic model`
+- **Model**: BGE-small-en-v1.5 (BAAI) by default; any BERT-style ONNX encoder via `git sem model`
 - **Runtime**: ONNX Runtime for fast local inference
 - **Storage**: Bincode serialization (~3KB per Commit)
 - **Similarity**: Cosine, computed as a dot product over L2-normalized vectors
@@ -371,7 +379,7 @@ A full index embeds diffs as well as messages, and results carry a couple of
 lines of diff context with them:
 
 ```bash
-$ git-semantic search "ONNX integration"
+$ git sem search "ONNX integration"
 
 🎯 Most Relevant Commits for: "ONNX integration"
 
