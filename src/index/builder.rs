@@ -34,8 +34,18 @@ impl IndexBuilder {
         index: SemanticIndex,
         mut model_manager: ModelManager,
     ) -> Result<Self, IndexError> {
-        model_manager.init()?;
         let model_version = model_manager.model_version();
+        // Vectors from two models can't be compared, so appending to an index
+        // another model built would corrupt every search over it. Callers
+        // rebuild instead; this is the backstop.
+        if index.model_version != model_version {
+            return Err(IndexError::ModelMismatch {
+                index: index.model_version,
+                active: model_version,
+            });
+        }
+
+        model_manager.init()?;
         let include_diffs = index.metadata.include_diffs;
         let created_at = Some(index.metadata.created_at);
 
@@ -63,7 +73,7 @@ impl IndexBuilder {
         debug!("Adding commit: {}", &commit.hash[..7]);
 
         let text = commit.to_text(self.include_diffs);
-        let embedding_array = self.model_manager.encode_text(&text)?;
+        let embedding_array = self.model_manager.encode_document(&text)?;
         let embedding = embedding_array.to_vec();
 
         let entry = IndexEntry { commit, embedding };

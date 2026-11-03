@@ -57,6 +57,7 @@ git log -S "mutex"        # Maybe? 🤷
 - 🤖 **Scriptable** - `--json` for piping into `jq`, a script, or an LLM
 - 🚀 **Fast** - Millisecond searches that stay flat as history grows (HNSW graph index)
 - 🔒 **Private** - Everything runs locally with ONNX, no API keys or cloud services
+- 🧠 **Your choice of model** - Swap in any ONNX embedding model from Hugging Face, or one on disk
 - 📦 **Zero config** - One command. The model downloads and the index builds on first search
 - 🎯 **Smart filtering** - By author, date, file, and more
 - 🐚 **Shell completions** - bash, zsh, fish, elvish, powershell
@@ -246,24 +247,82 @@ git-semantic index --force
 git-semantic stats
 ```
 
+### Choosing a model
+
+BGE-small is the default because it is small and quick. Any embedding model
+with an ONNX export can take its place, from Hugging Face or from disk:
+
+```bash
+git-semantic model BAAI/bge-base-en-v1.5    # a Hugging Face repo
+git-semantic model ./my-model               # a directory: model.onnx + tokenizer.json
+git-semantic model                          # show the active model
+git-semantic model default                  # back to BGE-small
+```
+
+Switching downloads the model and embeds a sample sentence before saving the
+choice, so a model that can't run is refused up front and the old one stays.
+
+Each index remembers the model that built it. Vectors from two models can't be
+compared, so the first search after a switch re-embeds that repository once,
+and `git-semantic stats` says when that is pending. Keyword-only search
+(`--mode lexical`) reads no vectors and skips it.
+
+Each of these was switched to, indexed this repository's history, and answered
+queries:
+
+| Model | Dimensions | Download | Needs |
+|---|---:|---:|---|
+| `bge-small-en-v1.5` (default) | 384 | 133 MB | |
+| `BAAI/bge-base-en-v1.5` | 768 | 436 MB | |
+| `sentence-transformers/all-MiniLM-L6-v2` | 384 | 90 MB | |
+| `Snowflake/snowflake-arctic-embed-s` | 384 | 133 MB | |
+| `jinaai/jina-embeddings-v2-small-en` | 512 | 130 MB | |
+| `nomic-ai/nomic-embed-text-v1.5` | 768 | 548 MB | prefixes, below |
+| `intfloat/e5-small-v2` | 384 | 133 MB | prefixes, below |
+
+How the model pools its token vectors, the prompts it expects on queries and
+documents, and its context length are read from the repo's sentence-transformers
+files (`1_Pooling/config.json`, `config_sentence_transformers.json`,
+`config.json`) when it has them. Flags cover models that don't:
+
+```bash
+# nomic and e5 expect prefixes their repos don't declare
+git-semantic model nomic-ai/nomic-embed-text-v1.5 \
+  --query-prefix "search_query: " --document-prefix "search_document: "
+git-semantic model intfloat/e5-small-v2 --query-prefix "query: " --document-prefix "passage: "
+
+# this ONNX-only copy of MiniLM ships no pooling settings
+git-semantic model Xenova/all-MiniLM-L6-v2 --pooling mean
+```
+
+A model that doesn't say how it pools is refused until `--pooling` is given,
+since a wrong guess gives quietly bad results rather than an error.
+
+Supported: BERT-style encoders (BERT, MiniLM, nomic-bert, jina-bert) whose ONNX
+graph takes some of `input_ids`, `attention_mask`, and `token_type_ids` and
+returns `last_hidden_state` or `sentence_embedding`, with CLS or mean pooling.
+Not supported: decoder models that pool the last token, private and gated
+repos, and exports that keep their weights in a separate `.onnx_data` file.
+
 ## How It Works
 
-1. **Downloads BGE-small-en-v1.5** - A compact AI model (130MB) for semantic embeddings
-2. **Indexes your repo** - Converts each commit into a 384-dimensional vector
+1. **Downloads BGE-small-en-v1.5** - A compact AI model (130MB) for semantic embeddings, unless you [chose another](#choosing-a-model)
+2. **Indexes your repo** - Converts each commit into a vector (384 dimensions with the default model)
 3. **Stores locally** - Binary index saved in `.git/semantic-index` (ignored by git)
 4. **Builds a proximity graph** - An HNSW index over those vectors, cached in `.git/semantic-index.hnsw`
 5. **Searches by meaning** - Your query becomes a vector; the graph finds its nearest commit vectors without touching most of the repository
 6. **ONNX Runtime** - Fast local inference, no cloud services needed
 
 **Stored locations:**
-- Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS)
+- Model: `~/Library/Application Support/com.git-semantic.git-semantic/models/` (macOS); other Hugging Face models get a folder each inside it
+- Model choice: `model.json` beside that folder on macOS, `~/.config/git-semantic/model.json` on Linux (absent means the default)
 - Index: `.git/semantic-index` (per repository, inside the git dir, so it is never committed)
 - Search graph: `.git/semantic-index.hnsw` (rebuilt automatically when stale)
 - Keyword index: `.git/semantic-index.bm25` (same)
 
 ## Technical Details
 
-- **Model**: BGE-small-en-v1.5 (BAAI)
+- **Model**: BGE-small-en-v1.5 (BAAI) by default; any BERT-style ONNX encoder via `git-semantic model`
 - **Runtime**: ONNX Runtime for fast local inference
 - **Storage**: Bincode serialization (~3KB per Commit)
 - **Similarity**: Cosine, computed as a dot product over L2-normalized vectors
@@ -345,7 +404,7 @@ docs: update installation instructions
 ## Requirements
 
 - A git repository — any directory inside it, including worktrees and submodules
-- ~130MB disk space for the AI model
+- ~130MB disk space for the default model (a bigger model takes more)
 - Rust 1.88+ (if building from source) — declared as `rust-version`, so cargo checks it for you
 
 ## License

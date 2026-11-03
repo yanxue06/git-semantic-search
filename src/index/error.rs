@@ -25,6 +25,9 @@ pub enum IndexError {
 
     #[error(transparent)]
     Embedding(#[from] crate::embedding::EmbeddingError),
+
+    #[error("index was built with {index}, but the active model is {active}")]
+    ModelMismatch { index: String, active: String },
 }
 
 impl IndexError {
@@ -49,6 +52,9 @@ impl IndexError {
                 "The index may be from an incompatible version. Rebuild with: git-semantic index --force",
             ),
             Self::Embedding(_) => None, // Delegate to EmbeddingError's own hint
+            Self::ModelMismatch { .. } => {
+                Some("Rebuild it with the active model: git-semantic index --force")
+            }
         }
     }
 
@@ -63,6 +69,7 @@ impl IndexError {
             Self::Io(_) => "E3006",
             Self::Bincode(_) => "E3007",
             Self::Embedding(_) => "E3008",
+            Self::ModelMismatch { .. } => "E3009",
         }
     }
 }

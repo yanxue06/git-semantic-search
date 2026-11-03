@@ -180,7 +180,7 @@ impl SearchEngine {
         let mut strategy = SearchStrategy::Exact;
 
         if mode.uses_semantic() {
-            let mut query_vector = self.model_manager.encode_text(query)?.to_vec();
+            let mut query_vector = self.model_manager.encode_query(query)?.to_vec();
             normalize(&mut query_vector);
 
             let usable_graph = graph.filter(|g| self.graph_is_usable(g, index, query_vector.len()));

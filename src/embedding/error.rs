@@ -31,6 +31,27 @@ pub enum EmbeddingError {
 
     #[error("tensor shape mismatch: {0}")]
     Shape(#[from] ndarray::ShapeError),
+
+    #[error("'{0}' is not a Hugging Face model id or a directory")]
+    InvalidModelName(String),
+
+    #[error("{0} was not found on Hugging Face")]
+    ModelNotFound(String),
+
+    #[error("{0} has no ONNX export (looked for onnx/model.onnx and model.onnx)")]
+    NoOnnxExport(String),
+
+    #[error("{0} doesn't say how it pools token vectors")]
+    UnknownPooling(String),
+
+    #[error("{model} can't be used: {reason}")]
+    UnsupportedModel { model: String, reason: String },
+
+    #[error("no model.onnx and tokenizer.json in {0}")]
+    LocalModelMissing(String),
+
+    #[error("the saved model choice is unreadable: {0}")]
+    InvalidModelConfig(String),
 }
 
 impl EmbeddingError {
@@ -59,7 +80,32 @@ impl EmbeddingError {
             Self::Shape(_) => {
                 Some("The model produced unexpected output. Try: git-semantic init --force")
             }
+            Self::InvalidModelName(_) => Some(
+                "Use a Hugging Face id like BAAI/bge-base-en-v1.5, a directory holding model.onnx and tokenizer.json, or `default`.",
+            ),
+            Self::ModelNotFound(_) => {
+                Some("Check the id on huggingface.co. Private and gated repos aren't supported.")
+            }
+            Self::NoOnnxExport(_) => Some(
+                "Pick a repo that ships an ONNX file, or export one with `optimum-cli export onnx` and pass the directory.",
+            ),
+            Self::UnknownPooling(_) => {
+                Some("Pass --pooling mean or --pooling cls. The model card says which.")
+            }
+            Self::UnsupportedModel { .. } => Some(
+                "Supported models are BERT-style encoders: input_ids, attention_mask, and token_type_ids in; last_hidden_state or sentence_embedding out.",
+            ),
+            Self::LocalModelMissing(_) => {
+                Some("Point at a directory holding both files. model.onnx may also sit in onnx/.")
+            }
+            Self::InvalidModelConfig(_) => Some("Reset it with: git-semantic model default"),
         }
+    }
+
+    /// A local model directory that lacks the files to run it. The path is
+    /// shortened the same way I/O errors are.
+    pub fn local_model_missing(dir: &std::path::Path) -> Self {
+        Self::LocalModelMissing(sanitize_path_in_message(&dir.display().to_string()))
     }
 
     /// Returns an error code for programmatic identification.
@@ -75,6 +121,13 @@ impl EmbeddingError {
             Self::Io(_) => "E1008",
             Self::Http(_) => "E1009",
             Self::Shape(_) => "E1010",
+            Self::InvalidModelName(_) => "E1011",
+            Self::ModelNotFound(_) => "E1012",
+            Self::NoOnnxExport(_) => "E1013",
+            Self::UnknownPooling(_) => "E1014",
+            Self::UnsupportedModel { .. } => "E1015",
+            Self::LocalModelMissing(_) => "E1016",
+            Self::InvalidModelConfig(_) => "E1017",
         }
     }
 }

@@ -140,7 +140,15 @@ fn test_completions_cover_every_subcommand() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    for subcommand in ["init", "index", "update", "search", "stats", "completions"] {
+    for subcommand in [
+        "init",
+        "index",
+        "update",
+        "search",
+        "stats",
+        "model",
+        "completions",
+    ] {
         assert!(
             stdout.contains(subcommand),
             "completion script should know about `{subcommand}`"

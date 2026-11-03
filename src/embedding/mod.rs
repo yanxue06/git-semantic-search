@@ -1,42 +1,23 @@
 mod error;
 mod model;
+mod spec;
 
 pub use error::EmbeddingError;
-pub use model::ModelManager;
+pub use model::{ModelManager, download_repo};
+pub use spec::{
+    DEFAULT_MODEL_NAME, DEFAULT_MODEL_REPO, DeclaredPooling, MAX_TOKENS, ModelChoice,
+    ModelSettings, ModelSource, ModelSpec, Pooling, clear_active_model, downloaded_models,
+    load_active_model, model_dir, model_files_present, parse_model_choice, read_model_settings,
+    save_active_model,
+};
 
 use ndarray::Array1;
-use serde::{Deserialize, Serialize};
 
 pub type Embedding = Array1<f32>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddingConfig {
-    pub model_name: String,
-    pub dimension: usize,
-    pub max_length: usize,
-}
-
-impl Default for EmbeddingConfig {
-    fn default() -> Self {
-        Self {
-            model_name: "bge-small-en-v1.5".to_string(),
-            dimension: 384,
-            max_length: 512,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_embedding_config_defaults() {
-        let config = EmbeddingConfig::default();
-        assert_eq!(config.model_name, "bge-small-en-v1.5");
-        assert_eq!(config.dimension, 384);
-        assert_eq!(config.max_length, 512);
-    }
 
     #[test]
     fn test_embedding_type_is_384_dimensional() {
