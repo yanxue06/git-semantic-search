@@ -5,7 +5,7 @@ pub enum EmbeddingError {
     #[error("failed to determine application data directory")]
     ProjectDirsNotFound,
 
-    #[error("model not found — run 'git-semantic init' first")]
+    #[error("model not found — run 'git sem init' first")]
     ModelNotDownloaded,
 
     #[error("model not initialized — call init() before encoding")]
@@ -61,7 +61,7 @@ impl EmbeddingError {
             Self::ProjectDirsNotFound => {
                 Some("Ensure your system supports standard data directories (e.g. $HOME is set).")
             }
-            Self::ModelNotDownloaded => Some("Run: git-semantic init"),
+            Self::ModelNotDownloaded => Some("Run: git sem init"),
             Self::ModelNotInitialized => Some(
                 "This is an internal error. Please report it at https://github.com/yanxue06/git-semantic-search/issues",
             ),
@@ -75,10 +75,10 @@ impl EmbeddingError {
                 Some("The model server returned an unexpected response. Try again later.")
             }
             Self::Http(_) => Some("Check your internet connection and firewall settings."),
-            Self::Ort(_) => Some("The ONNX model may be corrupted. Try: git-semantic init --force"),
+            Self::Ort(_) => Some("The ONNX model may be corrupted. Try: git sem init --force"),
             Self::Io(_) => Some("Check file permissions and available disk space."),
             Self::Shape(_) => {
-                Some("The model produced unexpected output. Try: git-semantic init --force")
+                Some("The model produced unexpected output. Try: git sem init --force")
             }
             Self::InvalidModelName(_) => Some(
                 "Use a Hugging Face id like BAAI/bge-base-en-v1.5, a directory holding model.onnx and tokenizer.json, or `default`.",
@@ -98,7 +98,7 @@ impl EmbeddingError {
             Self::LocalModelMissing(_) => {
                 Some("Point at a directory holding both files. model.onnx may also sit in onnx/.")
             }
-            Self::InvalidModelConfig(_) => Some("Reset it with: git-semantic model default"),
+            Self::InvalidModelConfig(_) => Some("Reset it with: git sem model default"),
         }
     }
 

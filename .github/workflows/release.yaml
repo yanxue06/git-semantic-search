@@ -24,7 +24,10 @@ jobs:
     uses: photon-hq/buildspace/.github/workflows/rust-service-release.yaml@v1.9.0
     with:
       service-name: git-semantic
-      binary-name: git-semantic
+      binary-name: git-sem
+      # Without a path the shared build also passes binary-name as --package,
+      # and the package is still called git-semantic.
+      binary-path: "."
       crates: '["."]'
       dry-run: ${{ inputs.dry-run || false }}
       release: ${{ inputs.release || false }}

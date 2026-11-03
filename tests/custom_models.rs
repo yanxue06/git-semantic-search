@@ -41,7 +41,7 @@ impl Sandbox {
     /// Run the binary with this sandbox as HOME, inside the repository.
     fn run(&self, args: &[&str]) -> Output {
         let home = self.home.path();
-        Command::new(env!("CARGO_BIN_EXE_git-semantic"))
+        Command::new(env!("CARGO_BIN_EXE_git-sem"))
             .args(args)
             .current_dir(self.repo.path())
             .env("HOME", home)

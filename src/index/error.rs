@@ -8,7 +8,7 @@ pub enum IndexError {
     #[error("invalid .git file format — unable to resolve worktree path")]
     InvalidGitFile,
 
-    #[error("index not found — run 'git-semantic index' first")]
+    #[error("index not found — run 'git sem index' first")]
     IndexNotFound,
 
     #[error("index is corrupted or was created by an incompatible version")]
@@ -40,20 +40,20 @@ impl IndexError {
             Self::InvalidGitFile => {
                 Some("The .git file may be corrupted. This can happen with broken worktree setups.")
             }
-            Self::IndexNotFound => Some("Run: git-semantic index"),
+            Self::IndexNotFound => Some("Run: git sem index"),
             Self::CorruptedIndex(_) => {
-                Some("The index file is unreadable. Rebuild it with: git-semantic index --force")
+                Some("The index file is unreadable. Rebuild it with: git sem index --force")
             }
             Self::SaveFailed(_) => {
                 Some("Check available disk space and file permissions on the .git directory.")
             }
             Self::Io(_) => Some("Check file permissions and available disk space."),
             Self::Bincode(_) => Some(
-                "The index may be from an incompatible version. Rebuild with: git-semantic index --force",
+                "The index may be from an incompatible version. Rebuild with: git sem index --force",
             ),
             Self::Embedding(_) => None, // Delegate to EmbeddingError's own hint
             Self::ModelMismatch { .. } => {
-                Some("Rebuild it with the active model: git-semantic index --force")
+                Some("Rebuild it with the active model: git sem index --force")
             }
         }
     }

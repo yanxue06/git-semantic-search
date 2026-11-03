@@ -60,7 +60,7 @@ pub fn init(force: bool) -> Result<()> {
 
     println!("\n🎉 git-semantic is ready to use!");
     println!("\nJust search — the index builds itself on first use:");
-    println!("  git-semantic search \"your query\"");
+    println!("  git sem search \"your query\"");
 
     Ok(())
 }
@@ -287,7 +287,7 @@ fn incremental_index(
 
 pub fn update(repo_path: &str) -> Result<()> {
     println!(
-        "Note: `git-semantic index` now automatically handles incremental updates.\n\
+        "Note: `git sem index` now automatically handles incremental updates.\n\
          The `update` command will be removed in a future release.\n"
     );
     index(repo_path, true, false)
@@ -465,12 +465,12 @@ pub fn search(repo_path: &str, request: SearchRequest) -> Result<()> {
 /// sequence needed a human: the model location is fixed and the index mode has
 /// a default. So `search` does it.
 ///
-/// Full mode, matching `git-semantic index`. Quick mode is faster but its index
+/// Full mode, matching `git sem index`. Quick mode is faster but its index
 /// is not a superset, so bootstrapping into it would quietly commit the user to
 /// the weaker option and a full re-embed to leave it.
 fn bootstrap(path: &Path, storage: &IndexStorage) -> Result<SemanticIndex> {
     eprintln!("No index for this repository yet — building one (one-time).");
-    eprintln!("For a faster, message-only index instead: git-semantic index --quick\n");
+    eprintln!("For a faster, message-only index instead: git sem index --quick\n");
 
     full_index(path, storage, true, Progress::Stderr)
 }
@@ -500,7 +500,7 @@ fn reembed(
     )
 }
 
-/// `git-semantic model`: show the active model, or switch to another.
+/// `git sem model`: show the active model, or switch to another.
 pub fn model(choice: Option<&str>, flags: ModelFlags) -> Result<()> {
     match choice {
         None => show_model(),
@@ -526,7 +526,7 @@ fn show_model() -> Result<()> {
     if !downloaded.is_empty() {
         println!("\nDownloaded: {}", downloaded.join(", "));
     }
-    println!("\nSwitch with: git-semantic model <hugging-face-id | directory | default>");
+    println!("\nSwitch with: git sem model <hugging-face-id | directory | default>");
     Ok(())
 }
 
@@ -547,7 +547,7 @@ fn switch_model(arg: &str, flags: ModelFlags) -> Result<()> {
     Ok(())
 }
 
-/// Turn the argument to `git-semantic model` into a spec that is known to run.
+/// Turn the argument to `git sem model` into a spec that is known to run.
 fn resolve_model(arg: &str, flags: ModelFlags) -> Result<ModelSpec> {
     let source = match parse_model_choice(arg)? {
         ModelChoice::Default => {

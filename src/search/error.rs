@@ -23,7 +23,7 @@ impl SearchError {
             Self::InvalidDateFormat { .. } => {
                 Some("Use the format YYYY-MM-DD, e.g. --after 2024-01-15")
             }
-            Self::IndexNotLoaded => Some("Run: git-semantic index"),
+            Self::IndexNotLoaded => Some("Run: git sem index"),
             Self::Embedding(_) => None, // Delegate to EmbeddingError's own hint
         }
     }

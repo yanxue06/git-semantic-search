@@ -39,7 +39,7 @@ pub struct ModelManager {
 }
 
 impl ModelManager {
-    /// The active model: whichever `git-semantic model` last chose.
+    /// The active model: whichever `git sem model` last chose.
     pub fn new() -> Result<Self, EmbeddingError> {
         Self::with_spec(load_active_model()?)
     }
@@ -295,7 +295,7 @@ fn http_client() -> Result<reqwest::blocking::Client, EmbeddingError> {
     Ok(client)
 }
 
-/// Fetch everything `git-semantic model` reads from a Hugging Face repo into `dir`.
+/// Fetch everything `git sem model` reads from a Hugging Face repo into `dir`.
 pub fn download_repo(repo: &str, dir: &Path) -> Result<(), EmbeddingError> {
     fs::create_dir_all(dir)?;
     let client = http_client()?;

@@ -26,7 +26,7 @@ impl GitError {
                 Some("Make sure you're inside a git repository, or use --path to specify one.")
             }
             Self::CommitNotFound(_) => Some(
-                "The index references commits that no longer exist. Run: git-semantic index --force",
+                "The index references commits that no longer exist. Run: git sem index --force",
             ),
             Self::NoHead => {
                 Some("The repository has no commits yet. Make at least one commit before indexing.")
