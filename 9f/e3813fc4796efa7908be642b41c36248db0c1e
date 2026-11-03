@@ -1,0 +1,93 @@
+tests/fixtures/make_tiny_models.py
+  s_584aa62855e0b0::t_0ac5130323cce7 1-164
+src/embedding/error.rs
+  s_584aa62855e0b0::t_9026abf7d482ad 83-101,105-108
+  s_584aa62855e0b0::t_b655022a48554b 34-54
+  s_584aa62855e0b0::t_268a96240b4402 124-130
+  s_584aa62855e0b0::t_518585ec587aba 109-110
+src/index/builder.rs
+  s_584aa62855e0b0::t_f94b9f38a8e567 76
+  s_584aa62855e0b0::t_27730cfff133d9 38-48
+src/embedding/spec.rs
+  s_584aa62855e0b0::t_629f9bc6cc00ad 111
+  s_584aa62855e0b0::t_74192f6377367a 405
+  s_584aa62855e0b0::t_c5f782952fb20d 64-79
+  s_584aa62855e0b0::t_1d51e987f5a274 126,128,130
+  s_584aa62855e0b0::t_d9c7a7fe96553c 1-63,80-110,112-125,127,129,131-404,406-571
+  s_584aa62855e0b0::t_efffdbf96e6e01 572-613
+src/index/error.rs
+  s_584aa62855e0b0::t_64be1ba8207ee4 72
+  s_584aa62855e0b0::t_34df8d04853d9e 28-30
+  s_584aa62855e0b0::t_f8fc79ce262e84 55-57
+src/embedding/mod.rs
+  s_584aa62855e0b0::t_7494774be2960b 3,6-12
+src/main.rs
+  s_584aa62855e0b0::t_2705fe9b5b64ea 150-178
+  s_584aa62855e0b0::t_32cd077b10424b 36-53
+  s_584aa62855e0b0::t_e1a96a7c1f39a9 296-308
+tests/custom_models.rs
+  s_584aa62855e0b0::t_f2214aae837169 1-272
+  s_584aa62855e0b0::t_104108a1a10af3 273-286
+README.md
+  s_584aa62855e0b0::t_989675447dbe20 407
+  s_584aa62855e0b0::t_b02a4b7951c74a 309-310
+  s_584aa62855e0b0::t_44155d0e79715b 325
+  s_584aa62855e0b0::t_631130a750ffd4 250-293,295-306
+  s_584aa62855e0b0::t_8038e66fb7a10f 60
+  s_584aa62855e0b0::t_c5089b24c5c808 294
+  s_584aa62855e0b0::t_e0e332ef9f2d79 317-318
+src/cli/mod.rs
+  s_584aa62855e0b0::t_9952aecf82d155 28-36
+  s_584aa62855e0b0::t_8ef2e69d8781e9 4
+src/embedding/model.rs
+  s_584aa62855e0b0::t_990a50b07bb27a 91,93-96
+  s_584aa62855e0b0::t_cf2cf64fb7566e 5,7-9,13-26,29,33-38,42,44-45,47-48,50,54-56,60-68,74-75,78,82-88,106,109-110,112-118,120-122,124-127,129,131-140,159-165,167-177,179-180,182-189,191,202,204-311,316-321,323-324,327,339,341-346,369-378,380-405,407-417,419-470,473-478,481
+  s_584aa62855e0b0::t_6e79685640052e 406
+  s_584aa62855e0b0::t_a8d99901f0b67f 312-315,322,325-326,328-338,340,347-368,379
+  s_584aa62855e0b0::t_108f3b33140341 482-495
+  s_584aa62855e0b0::t_5ff30fc0a74186 418
+src/cli/commands.rs
+  s_584aa62855e0b0::t_10d106793514af 3
+  s_584aa62855e0b0::t_5f677fff11ab59 82-85
+  s_584aa62855e0b0::t_27afffaf93d508 9-14
+  s_584aa62855e0b0::t_90715ea204fe1d 519-520
+  s_584aa62855e0b0::t_d5c5af9a30ded2 478-498,500-518,521-576,583-674
+  s_584aa62855e0b0::t_a034be55dd9d7c 49-55
+  s_584aa62855e0b0::t_eb9f1a2d944501 320-330
+  s_584aa62855e0b0::t_3f1c77a4de7896 577-582
+  s_584aa62855e0b0::t_3dd303cb44a58d 685-688
+  s_584aa62855e0b0::t_4ac5e5c10ca325 130-142
+  s_584aa62855e0b0::t_b0449572cab8d5 499
+src/search/engine.rs
+  s_584aa62855e0b0::t_d83a060f974323 183
+tests/cli_parsing.rs
+  s_584aa62855e0b0::t_c852d525f70bf7 143-151
+tests/fixtures/tiny-cls/1_Pooling/config.json
+  s_584aa62855e0b0::t_7be680b666db19 1-7
+tests/fixtures/tiny-cls/config.json
+  s_584aa62855e0b0::t_d51fa04b974e9a 1-4
+tests/fixtures/tiny-cls/config_sentence_transformers.json
+  s_584aa62855e0b0::t_8117229a8fac12 1-6
+tests/fixtures/tiny-cls/tokenizer.json
+  s_584aa62855e0b0::t_4d8992c94790b6 1-95
+tests/fixtures/tiny-mean/1_Pooling/config.json
+  s_584aa62855e0b0::t_61ec1a3cd88314 1-7
+tests/fixtures/tiny-mean/tokenizer.json
+  s_584aa62855e0b0::t_fc036e46fa427b 1-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9fe3813fc4796efa7908be642b41c36248db0c1e",
+  "prompts": {},
+  "sessions": {
+    "s_584aa62855e0b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9294f1d7-7408-4055-8d69-28054cba1ab1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Yan Xue <y9xue@uwaterloo.ca>"
+    }
+  }
+}
